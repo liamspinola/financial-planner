@@ -1,0 +1,24 @@
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Sidebar from './components/Sidebar';
+import Dashboard from './views/Dashboard';
+import Debts from './views/Debts';
+import Budget from './views/Budget';
+import Plan from './views/Plan';
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <div className="flex min-h-screen bg-navy-900">
+        <Sidebar />
+        <main className="flex-1 overflow-auto">
+          <Routes>
+            <Route path="/"       element={<Dashboard />} />
+            <Route path="/debts"  element={<Debts />} />
+            <Route path="/budget" element={<Budget />} />
+            <Route path="/plan"   element={<Plan />} />
+          </Routes>
+        </main>
+      </div>
+    </BrowserRouter>
+  );
+}
