@@ -47,6 +47,13 @@ function computeSummary(incomeSources, expenses, debts, tranches = []) {
   const surplusAfterExpenses = totalIncome - totalExpenses;
 
   const totalMinimums = debts.reduce((sum, d) => {
+    if (d.min_payment_pct != null) {
+      // Percentage-based minimum: MAX(floor, balance * pct) using current balances
+      const debtTranches = tranches.filter(t => t.debt_id === d.id);
+      const totalBalance = debtTranches.reduce((s, t) => s + t.balance, 0);
+      const pctMin = totalBalance * d.min_payment_pct;
+      return sum + Math.max(d.min_payment_floor || 0, pctMin);
+    }
     if (d.minimum_payment > 0) return sum + d.minimum_payment;
     // No stated minimum — treat first month's interest as the floor
     const debtTranches = tranches.filter(t => t.debt_id === d.id);
@@ -78,6 +85,8 @@ function groupTranchsByDebt(debts, tranches) {
       debtName: debt.name,
       debtType: debt.debt_type,
       minimum: debt.minimum_payment,
+      minPaymentPct:   debt.min_payment_pct   ?? null,
+      minPaymentFloor: debt.min_payment_floor ?? null,
       tranches: [],
     });
   }

@@ -4,6 +4,7 @@ import Dashboard from './views/Dashboard';
 import Debts from './views/Debts';
 import Budget from './views/Budget';
 import Plan from './views/Plan';
+import Progress from './views/Progress';
 
 export default function App() {
   return (
@@ -12,10 +13,11 @@ export default function App() {
         <Sidebar />
         <main className="flex-1 overflow-auto">
           <Routes>
-            <Route path="/"       element={<Dashboard />} />
-            <Route path="/debts"  element={<Debts />} />
-            <Route path="/budget" element={<Budget />} />
-            <Route path="/plan"   element={<Plan />} />
+            <Route path="/"         element={<Dashboard />} />
+            <Route path="/debts"    element={<Debts />} />
+            <Route path="/budget"   element={<Budget />} />
+            <Route path="/plan"     element={<Plan />} />
+            <Route path="/progress" element={<Progress />} />
           </Routes>
         </main>
       </div>

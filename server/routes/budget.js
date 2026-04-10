@@ -5,6 +5,9 @@ const router = express.Router();
 const { getDb } = require('../db/database');
 const { toMonthly } = require('../engine/calculator');
 
+const VALID_FREQUENCIES = ['weekly', 'fortnightly', 'four_weekly', 'monthly', 'annual'];
+function isFiniteNonNegative(v) { return typeof v === 'number' && isFinite(v) && v >= 0; }
+
 // GET /api/budget — all income sources and expenses
 router.get('/', (req, res) => {
   const db = getDb();
@@ -16,8 +19,10 @@ router.get('/', (req, res) => {
 // POST /api/budget/income
 router.post('/income', (req, res) => {
   const { label, amount, frequency } = req.body;
-  if (!label || amount == null) return res.status(400).json({ error: 'label and amount required' });
+  if (!label || typeof label !== 'string' || !label.trim()) return res.status(400).json({ error: 'label is required' });
+  if (!isFiniteNonNegative(amount)) return res.status(400).json({ error: 'amount must be a non-negative number' });
   const freq = frequency || 'monthly';
+  if (!VALID_FREQUENCIES.includes(freq)) return res.status(400).json({ error: `frequency must be one of: ${VALID_FREQUENCIES.join(', ')}` });
   const monthly_equivalent = toMonthly(amount, freq);
   const db = getDb();
   const { lastInsertRowid } = db.prepare(
@@ -30,7 +35,10 @@ router.post('/income', (req, res) => {
 // PUT /api/budget/income/:id
 router.put('/income/:id', (req, res) => {
   const { label, amount, frequency } = req.body;
+  if (!label || typeof label !== 'string' || !label.trim()) return res.status(400).json({ error: 'label is required' });
+  if (!isFiniteNonNegative(amount)) return res.status(400).json({ error: 'amount must be a non-negative number' });
   const freq = frequency || 'monthly';
+  if (!VALID_FREQUENCIES.includes(freq)) return res.status(400).json({ error: `frequency must be one of: ${VALID_FREQUENCIES.join(', ')}` });
   const monthly_equivalent = toMonthly(amount, freq);
   const db = getDb();
   const existing = db.prepare('SELECT id FROM income_sources WHERE id = ?').get(req.params.id);
@@ -55,7 +63,9 @@ router.delete('/income/:id', (req, res) => {
 // POST /api/budget/expenses
 router.post('/expenses', (req, res) => {
   const { label, amount, category, is_essential } = req.body;
-  if (!label || amount == null || !category) return res.status(400).json({ error: 'label, amount, category required' });
+  if (!label || typeof label !== 'string' || !label.trim()) return res.status(400).json({ error: 'label is required' });
+  if (!isFiniteNonNegative(amount)) return res.status(400).json({ error: 'amount must be a non-negative number' });
+  if (!category || typeof category !== 'string') return res.status(400).json({ error: 'category is required' });
   const db = getDb();
   const { lastInsertRowid } = db.prepare(
     'INSERT INTO expenses (label, amount, category, is_essential) VALUES (?, ?, ?, ?)'
@@ -67,6 +77,9 @@ router.post('/expenses', (req, res) => {
 // PUT /api/budget/expenses/:id
 router.put('/expenses/:id', (req, res) => {
   const { label, amount, category, is_essential } = req.body;
+  if (!label || typeof label !== 'string' || !label.trim()) return res.status(400).json({ error: 'label is required' });
+  if (!isFiniteNonNegative(amount)) return res.status(400).json({ error: 'amount must be a non-negative number' });
+  if (!category || typeof category !== 'string') return res.status(400).json({ error: 'category is required' });
   const db = getDb();
   const existing = db.prepare('SELECT id FROM expenses WHERE id = ?').get(req.params.id);
   if (!existing) return res.status(404).json({ error: 'Not found' });

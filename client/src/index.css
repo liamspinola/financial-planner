@@ -66,12 +66,50 @@
     display: none !important;
   }
 
-  body {
+  /* --- Base --- */
+  body, html {
     background: white !important;
-    color: black !important;
+    color: #111 !important;
+    font-size: 11pt;
   }
 
-  .print-break-before {
-    page-break-before: always;
+  /* --- Layout --- */
+  /* Remove sidebar-induced left margin/padding */
+  #root > * { padding-left: 0 !important; }
+
+  .p-8 { padding: 0 !important; }
+
+  /* --- Cards --- */
+  .card {
+    background: white !important;
+    border: 1px solid #cbd5e1 !important;
+    border-radius: 8px !important;
+    break-inside: avoid;
   }
+
+  /* --- Text colours → readable on white --- */
+  .text-slate-100, .text-slate-200, .text-slate-300 { color: #1e293b !important; }
+  .text-slate-400, .text-slate-500 { color: #475569 !important; }
+  .text-teal-300, .text-teal-400 { color: #0f766e !important; }
+  .text-amber-400 { color: #b45309 !important; }
+  .text-red-400, .text-red-300 { color: #b91c1c !important; }
+  .text-green-400, .text-green-300 { color: #15803d !important; }
+
+  /* --- Borders --- */
+  .border-slate-700, .divide-slate-700\/50 > * + * {
+    border-color: #cbd5e1 !important;
+  }
+
+  /* --- Chart: constrain container width for PDF layout --- */
+  .print-chart-container {
+    width: 680px !important;
+    height: 300px !important;
+    overflow: hidden !important;
+  }
+
+  /* --- Page breaks --- */
+  .print-break-before { page-break-before: always; }
+
+  /* Force a page break before the monthly guide so it starts clean */
+  .card:has(.space-y-1) { page-break-before: always; }
 }

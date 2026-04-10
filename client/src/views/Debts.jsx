@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { gbp, aprPct, ukDate, daysUntil } from '../lib/format';
 import PageHeader from '../components/PageHeader';
 import Spinner from '../components/Spinner';
+import { PROMO_ALERT_DAYS, APR_HIGH_THRESHOLD, APR_MID_THRESHOLD } from '../lib/constants';
 
 const DEBT_TYPES = [
   { value: 'credit_card',   label: 'Credit Card' },
@@ -18,12 +19,18 @@ function blankTranche() {
 }
 
 function blankDebt() {
-  return { name: '', lender: '', debt_type: 'credit_card', minimum_payment: '', tranches: [blankTranche()] };
+  return {
+    name: '', lender: '', debt_type: 'credit_card',
+    min_type: 'fixed', minimum_payment: '',
+    min_payment_pct: '2', min_payment_floor: '25',
+    notes: '',
+    tranches: [blankTranche()],
+  };
 }
 
 function aprBadgeColor(apr) {
-  if (apr >= 0.20) return 'bg-red-500/20 text-red-300';
-  if (apr >= 0.10) return 'bg-amber-500/20 text-amber-300';
+  if (apr >= APR_HIGH_THRESHOLD) return 'bg-red-500/20 text-red-300';
+  if (apr >= APR_MID_THRESHOLD)  return 'bg-amber-500/20 text-amber-300';
   return 'bg-green-500/20 text-green-300';
 }
 
@@ -35,6 +42,7 @@ function PromoCountdown({ days }) {
 
 function DebtForm({ initial, onSave, onCancel }) {
   const [form, setForm] = useState(initial);
+  const [formError, setFormError] = useState(null);
   const setField = (k, v) => setForm(f => ({ ...f, [k]: v }));
   const setTranche = (i, k, v) => setForm(f => {
     const t = [...f.tranches];
@@ -45,11 +53,15 @@ function DebtForm({ initial, onSave, onCancel }) {
   const removeTranche = (i) => setForm(f => ({ ...f, tranches: f.tranches.filter((_, j) => j !== i) }));
 
   function buildPayload() {
+    const usePct = form.min_type === 'pct';
     return {
       name: form.name,
       lender: form.lender,
       debt_type: form.debt_type,
-      minimum_payment: parseFloat(form.minimum_payment) || 0,
+      minimum_payment: usePct ? 0 : (parseFloat(form.minimum_payment) || 0),
+      min_payment_pct:   usePct ? (parseFloat(form.min_payment_pct) || 0) / 100 : null,
+      min_payment_floor: usePct ? (parseFloat(form.min_payment_floor) || 0) : null,
+      notes: form.notes?.trim() || null,
       tranches: form.tranches.map(t => ({
         label: t.label,
         balance: parseFloat(t.balance) || 0,
@@ -60,27 +72,90 @@ function DebtForm({ initial, onSave, onCancel }) {
     };
   }
 
+  function validate() {
+    if (!form.name.trim()) return 'Account name is required.';
+    for (let i = 0; i < form.tranches.length; i++) {
+      const t = form.tranches[i];
+      if (!t.label.trim()) return `Segment ${i + 1}: label is required.`;
+      const balance = parseFloat(t.balance);
+      if (isNaN(balance) || balance < 0) return `Segment ${i + 1}: balance must be a non-negative number.`;
+      const apr = parseFloat(t.apr);
+      if (isNaN(apr) || apr < 0 || apr > 200) return `Segment ${i + 1}: APR must be between 0 and 200.`;
+      if (t.hasPromo) {
+        if (!t.promo_end_date) return `Segment ${i + 1}: promo end date is required when promotional rate is enabled.`;
+        const postApr = parseFloat(t.post_promo_apr);
+        if (isNaN(postApr) || postApr < 0 || postApr > 200) return `Segment ${i + 1}: post-promo APR must be between 0 and 200.`;
+      }
+    }
+    return null;
+  }
+
+  function handleSave() {
+    const error = validate();
+    if (error) { setFormError(error); return; }
+    setFormError(null);
+    onSave(buildPayload());
+  }
+
   return (
     <div className="card p-5 space-y-4">
+      {formError && (
+        <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-300">{formError}</div>
+      )}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="label">Account Name *</label>
-          <input className="input" placeholder="e.g. Barclaycard Visa" value={form.name} onChange={e => setField('name', e.target.value)} />
+          <label htmlFor="debt-name" className="label">Account Name *</label>
+          <input id="debt-name" className="input" placeholder="e.g. Barclaycard Visa" value={form.name} onChange={e => setField('name', e.target.value)} />
         </div>
         <div>
-          <label className="label">Lender</label>
-          <input className="input" placeholder="e.g. Barclays" value={form.lender} onChange={e => setField('lender', e.target.value)} />
+          <label htmlFor="debt-lender" className="label">Lender</label>
+          <input id="debt-lender" className="input" placeholder="e.g. Barclays" value={form.lender} onChange={e => setField('lender', e.target.value)} />
         </div>
         <div>
-          <label className="label">Type</label>
-          <select className="input" value={form.debt_type} onChange={e => setField('debt_type', e.target.value)}>
+          <label htmlFor="debt-type" className="label">Type</label>
+          <select id="debt-type" className="input" value={form.debt_type} onChange={e => setField('debt_type', e.target.value)}>
             {DEBT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
         <div>
-          <label className="label">Monthly Minimum Payment (£)</label>
-          <input className="input" type="number" min="0" step="0.01" placeholder="0.00" value={form.minimum_payment} onChange={e => setField('minimum_payment', e.target.value)} />
+          <label className="label">Minimum Payment</label>
+          <div className="flex gap-1 mb-2">
+            {['fixed', 'pct'].map(type => (
+              <button key={type} type="button" onClick={() => setField('min_type', type)}
+                className={`px-3 py-1 rounded text-xs font-medium border transition-colors ${
+                  form.min_type === type
+                    ? 'bg-teal-500/20 border-teal-500/50 text-teal-300'
+                    : 'bg-transparent border-slate-600 text-slate-400 hover:border-slate-500'
+                }`}
+              >
+                {type === 'fixed' ? 'Fixed £' : '% of balance'}
+              </button>
+            ))}
+          </div>
+          {form.min_type === 'fixed' ? (
+            <input className="input" type="number" min="0" step="0.01" placeholder="0.00"
+              value={form.minimum_payment} onChange={e => setField('minimum_payment', e.target.value)} />
+          ) : (
+            <div className="flex gap-2">
+              <div className="flex-1">
+                <label className="label text-xs">% of balance</label>
+                <input className="input" type="number" min="0" max="100" step="0.1" placeholder="2"
+                  value={form.min_payment_pct} onChange={e => setField('min_payment_pct', e.target.value)} />
+              </div>
+              <div className="flex-1">
+                <label className="label text-xs">Floor (£)</label>
+                <input className="input" type="number" min="0" step="0.01" placeholder="25"
+                  value={form.min_payment_floor} onChange={e => setField('min_payment_floor', e.target.value)} />
+              </div>
+            </div>
+          )}
         </div>
+      </div>
+
+      <div>
+        <label className="label">Notes (optional)</label>
+        <textarea className="input resize-none" rows={2} placeholder="Lender phone number, balance transfer ref, reminders…"
+          value={form.notes} onChange={e => setField('notes', e.target.value)} />
       </div>
 
       <div>
@@ -93,38 +168,38 @@ function DebtForm({ initial, onSave, onCancel }) {
             <div key={i} className="bg-slate-700/30 rounded-lg p-4 space-y-3">
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="label">Label</label>
-                  <input className="input" placeholder="e.g. Balance Transfer" value={t.label} onChange={e => setTranche(i, 'label', e.target.value)} />
+                  <label htmlFor={`tranche-label-${i}`} className="label">Label</label>
+                  <input id={`tranche-label-${i}`} className="input" placeholder="e.g. Balance Transfer" value={t.label} onChange={e => setTranche(i, 'label', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">Balance (£)</label>
-                  <input className="input" type="number" min="0" step="0.01" value={t.balance} onChange={e => setTranche(i, 'balance', e.target.value)} />
+                  <label htmlFor={`tranche-balance-${i}`} className="label">Balance (£)</label>
+                  <input id={`tranche-balance-${i}`} className="input" type="number" min="0" step="0.01" value={t.balance} onChange={e => setTranche(i, 'balance', e.target.value)} />
                 </div>
                 <div>
-                  <label className="label">APR (%)</label>
-                  <input className="input" type="number" min="0" step="0.1" value={t.apr} onChange={e => setTranche(i, 'apr', e.target.value)} />
+                  <label htmlFor={`tranche-apr-${i}`} className="label">APR (%)</label>
+                  <input id={`tranche-apr-${i}`} className="input" type="number" min="0" step="0.1" value={t.apr} onChange={e => setTranche(i, 'apr', e.target.value)} />
                 </div>
               </div>
 
               <div className="flex items-center gap-4">
-                <label className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
-                  <input type="checkbox" className="accent-teal-500" checked={t.hasPromo} onChange={e => setTranche(i, 'hasPromo', e.target.checked)} />
+                <label htmlFor={`tranche-promo-${i}`} className="flex items-center gap-2 text-sm text-slate-300 cursor-pointer">
+                  <input id={`tranche-promo-${i}`} type="checkbox" className="accent-teal-500" checked={t.hasPromo} onChange={e => setTranche(i, 'hasPromo', e.target.checked)} />
                   Promotional rate (expires)
                 </label>
                 {form.tranches.length > 1 && (
-                  <button onClick={() => removeTranche(i)} className="ml-auto text-xs text-red-400 hover:text-red-300"><Trash2 size={13} /></button>
+                  <button onClick={() => removeTranche(i)} aria-label={`Remove segment ${i + 1}`} className="ml-auto text-xs text-red-400 hover:text-red-300"><Trash2 size={13} /></button>
                 )}
               </div>
 
               {t.hasPromo && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="label">Promo End Date</label>
-                    <input className="input" type="date" value={t.promo_end_date} onChange={e => setTranche(i, 'promo_end_date', e.target.value)} />
+                    <label htmlFor={`tranche-promo-date-${i}`} className="label">Promo End Date</label>
+                    <input id={`tranche-promo-date-${i}`} className="input" type="date" value={t.promo_end_date} onChange={e => setTranche(i, 'promo_end_date', e.target.value)} />
                   </div>
                   <div>
-                    <label className="label">Post-Promo APR (%)</label>
-                    <input className="input" type="number" min="0" step="0.1" placeholder="e.g. 22.9" value={t.post_promo_apr} onChange={e => setTranche(i, 'post_promo_apr', e.target.value)} />
+                    <label htmlFor={`tranche-post-apr-${i}`} className="label">Post-Promo APR (%)</label>
+                    <input id={`tranche-post-apr-${i}`} className="input" type="number" min="0" step="0.1" placeholder="e.g. 22.9" value={t.post_promo_apr} onChange={e => setTranche(i, 'post_promo_apr', e.target.value)} />
                   </div>
                 </div>
               )}
@@ -134,14 +209,14 @@ function DebtForm({ initial, onSave, onCancel }) {
       </div>
 
       <div className="flex gap-2 pt-2">
-        <button onClick={() => onSave(buildPayload())} className="btn-teal">Save Debt</button>
+        <button onClick={handleSave} className="btn-teal">Save Debt</button>
         <button onClick={onCancel} className="btn-ghost">Cancel</button>
       </div>
     </div>
   );
 }
 
-function DebtCard({ debt, tranches, onEdit, onDelete }) {
+function DebtCard({ debt, tranches, onEdit, onDelete, confirmingDelete, onConfirmDelete, onCancelDelete }) {
   const [expanded, setExpanded] = useState(false);
   const totalBalance = tranches.reduce((s, t) => s + t.balance, 0);
   const typeLabel = DEBT_TYPES.find(x => x.value === debt.debt_type)?.label || debt.debt_type;
@@ -149,7 +224,7 @@ function DebtCard({ debt, tranches, onEdit, onDelete }) {
   const promoAlerts = tranches.filter(t => {
     if (!t.promo_end_date) return false;
     const days = daysUntil(t.promo_end_date);
-    return days !== null && days <= 60 && days >= 0;
+    return days !== null && days <= PROMO_ALERT_DAYS && days >= 0;
   });
 
   return (
@@ -170,7 +245,11 @@ function DebtCard({ debt, tranches, onEdit, onDelete }) {
           </div>
           <div className="text-right ml-4">
             <p className="text-lg font-semibold tabular-nums text-red-400">{gbp(totalBalance)}</p>
-            <p className="text-xs text-slate-400">Min: {gbp(debt.minimum_payment)}/mo</p>
+            <p className="text-xs text-slate-400">
+              Min: {debt.min_payment_pct != null
+                ? `${(debt.min_payment_pct * 100).toFixed(1)}%${debt.min_payment_floor ? ` (min ${gbp(debt.min_payment_floor)})` : ''}`
+                : `${gbp(debt.minimum_payment)}/mo`}
+            </p>
           </div>
         </div>
 
@@ -179,9 +258,19 @@ function DebtCard({ debt, tranches, onEdit, onDelete }) {
             {expanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
             {tranches.length} segment{tranches.length !== 1 ? 's' : ''}
           </button>
-          <div className="ml-auto flex gap-1">
-            <button onClick={onEdit} className="p-1.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700"><Edit2 size={13} /></button>
-            <button onClick={onDelete} className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-red-500/10"><Trash2 size={13} /></button>
+          <div className="ml-auto flex items-center gap-1">
+            {confirmingDelete ? (
+              <>
+                <span className="text-xs text-slate-400 mr-1">Delete?</span>
+                <button onClick={onConfirmDelete} className="px-2 py-1 rounded text-xs text-red-300 bg-red-500/20 hover:bg-red-500/30">Yes</button>
+                <button onClick={onCancelDelete} className="px-2 py-1 rounded text-xs text-slate-400 hover:bg-slate-700">No</button>
+              </>
+            ) : (
+              <>
+                <button onClick={onEdit} aria-label="Edit debt" className="p-1.5 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-700"><Edit2 size={13} /></button>
+                <button onClick={onDelete} aria-label="Delete debt" className="p-1.5 rounded text-slate-400 hover:text-red-400 hover:bg-red-500/10"><Trash2 size={13} /></button>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -209,6 +298,12 @@ function DebtCard({ debt, tranches, onEdit, onDelete }) {
               </div>
             );
           })}
+          {debt.notes && (
+            <div className="pt-2 border-t border-slate-700/50">
+              <p className="text-xs text-slate-500 mb-1">Notes</p>
+              <p className="text-sm text-slate-300 whitespace-pre-wrap">{debt.notes}</p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -221,6 +316,7 @@ export default function Debts() {
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   useEffect(() => { load(); }, []);
 
@@ -250,10 +346,10 @@ export default function Debts() {
   }
 
   async function deleteDebt(id) {
-    if (!confirm('Delete this debt and all its balance segments?')) return;
     await api.deleteDebt(id);
     setDebts(debts.filter(d => d.id !== id));
     setTranches(tranches.filter(t => t.debt_id !== id));
+    setConfirmDeleteId(null);
   }
 
   const totalDebt = tranches.reduce((s, t) => s + t.balance, 0);
@@ -282,7 +378,11 @@ export default function Debts() {
               key={debt.id}
               initial={{
                 name: debt.name, lender: debt.lender || '', debt_type: debt.debt_type,
+                min_type: debt.min_payment_pct != null ? 'pct' : 'fixed',
                 minimum_payment: debt.minimum_payment,
+                min_payment_pct:   debt.min_payment_pct   != null ? (debt.min_payment_pct * 100).toFixed(1)   : '2',
+                min_payment_floor: debt.min_payment_floor != null ? debt.min_payment_floor.toFixed(2) : '25',
+                notes: debt.notes || '',
                 tranches: debtTranches.map(t => ({
                   label: t.label, balance: t.balance,
                   apr: (t.apr * 100).toFixed(2),
@@ -300,7 +400,10 @@ export default function Debts() {
               debt={debt}
               tranches={debtTranches}
               onEdit={() => { setEditing(debt.id); setAdding(false); }}
-              onDelete={() => deleteDebt(debt.id)}
+              onDelete={() => setConfirmDeleteId(debt.id)}
+              confirmingDelete={confirmDeleteId === debt.id}
+              onConfirmDelete={() => deleteDebt(debt.id)}
+              onCancelDelete={() => setConfirmDeleteId(null)}
             />
           );
         })}

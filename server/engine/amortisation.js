@@ -3,10 +3,17 @@
 const MAX_MONTHS = 360; // 30-year safety cap
 
 /**
- * Effective minimum for a group: if stated minimum is 0, use current month's
- * interest across all active tranches so the balance never silently grows.
+ * Effective minimum for a group this month.
+ * - Percentage-based: MAX(floor, currentBalance * pct)
+ * - Fixed: stated minimum_payment
+ * - Zero stated minimum: first month's interest across active tranches (break-even)
  */
 function effectiveMin(group) {
+  if (group.minPaymentPct != null) {
+    const currentBalance = group.tranches.reduce((s, t) => s + Math.max(0, t.balance), 0);
+    const pctMin = currentBalance * group.minPaymentPct;
+    return Math.max(group.minPaymentFloor || 0, pctMin);
+  }
   if (group.minimum > 0) return group.minimum;
   return group.tranches.reduce((sum, t) => {
     if (t.balance <= 0) return sum;
@@ -75,13 +82,15 @@ function applyPaymentToAccount(tranches, payment, simMonth) {
 /**
  * Run a full month-by-month payoff simulation.
  *
- * @param {Map}    debtMap  - output of groupTranchsByDebt (will be cloned)
- * @param {number} available - monthly amount available above all minimums (£)
- * @param {string} strategy  - 'avalanche' | 'snowball'
- * @param {Date}   startDate - simulation start date
+ * @param {Map}    debtMap      - output of groupTranchsByDebt (will be cloned)
+ * @param {number} available    - monthly amount available above all minimums (£)
+ * @param {string} strategy     - 'avalanche' | 'snowball'
+ * @param {Date}   startDate    - simulation start date
+ * @param {Array}  [windfalls]  - optional [{ apply_month, amount }] lump sums
+ * @param {number} [fundingDelay] - months to redirect extra payments to savings (emergency fund)
  * @returns {Object} { months, totalInterest, payoffMonths, monthlyStates }
  */
-function simulate(debtMap, available, strategy, startDate) {
+function simulate(debtMap, available, strategy, startDate, windfalls = [], fundingDelay = 0) {
   const groups = cloneGroups(debtMap);
   const monthlyStates = [];
   let totalInterest = 0;
@@ -103,8 +112,16 @@ function simulate(debtMap, available, strategy, startDate) {
       break;
     }
 
-    // Extra payment this month = surplus above all effective minimums + any freed minimums
-    const monthlyExtra = available + freedMinimums;
+    // Add any windfalls scheduled for this month
+    const windfall = windfalls
+      .filter(w => w.apply_month === m + 1)
+      .reduce((s, w) => s + w.amount, 0);
+
+    // During emergency fund phase, redirect extra payments to savings (no extra on debts)
+    const inFundingPhase = m < fundingDelay;
+
+    // Extra payment this month = surplus above all effective minimums + any freed minimums + windfalls
+    const monthlyExtra = inFundingPhase ? 0 : (available + freedMinimums + windfall);
 
     // Snapshot pre-payment balances BEFORE any interest accrual or payment application.
     // Used below to detect which debts clear THIS month — we can't rely on post-payment
@@ -145,6 +162,9 @@ function simulate(debtMap, available, strategy, startDate) {
       payments: [],
       totalInterestThisMonth: 0,
       debtsCleared: [],
+      windfall: windfall > 0 ? windfall : null,
+      isFundingPhase: inFundingPhase,
+      fundingSaving: inFundingPhase ? available : 0,
     };
 
     // Apply effective minimum payments to all non-target accounts.

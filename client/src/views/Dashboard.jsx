@@ -8,24 +8,8 @@ import { gbp, daysUntil, ukDate, aprPct, monthsLabel } from '../lib/format';
 import StatCard from '../components/StatCard';
 import PageHeader from '../components/PageHeader';
 import Spinner from '../components/Spinner';
-
-const DEBT_COLORS = ['#14b8a6','#f59e0b','#8b5cf6','#ec4899','#06b6d4','#84cc16','#f97316'];
-
-function CustomTooltip({ active, payload, label }) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-navy-800 border border-slate-700 rounded-lg p-3 text-xs shadow-xl">
-      <p className="text-slate-400 mb-2">Month {label}</p>
-      {payload.map((p, i) => (
-        <div key={i} className="flex items-center gap-2 mb-1">
-          <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
-          <span className="text-slate-300">{p.name}:</span>
-          <span className="font-semibold tabular-nums text-slate-100">{gbp(p.value)}</span>
-        </div>
-      ))}
-    </div>
-  );
-}
+import ChartTooltip from '../components/ChartTooltip';
+import { DEBT_COLORS, PROMO_ALERT_DAYS } from '../lib/constants';
 
 export default function Dashboard() {
   const [plan, setPlan] = useState(null);
@@ -58,11 +42,11 @@ export default function Dashboard() {
   const totalDebt = tranches.reduce((s, t) => s + t.balance, 0);
   const totalIncome = income.reduce((s, i) => s + i.monthly_equivalent, 0);
 
-  // Promo expiry alerts (within 60 days)
+  // Promo expiry alerts (within PROMO_ALERT_DAYS)
   const promoAlerts = tranches.filter(t => {
     if (!t.promo_end_date) return false;
     const days = daysUntil(t.promo_end_date);
-    return days !== null && days >= 0 && days <= 60;
+    return days !== null && days >= 0 && days <= PROMO_ALERT_DAYS;
   }).map(t => {
     const debt = debts.find(d => d.id === t.debt_id);
     return { ...t, debtName: debt?.name || 'Unknown', days: daysUntil(t.promo_end_date) };
@@ -136,7 +120,7 @@ export default function Dashboard() {
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
               <YAxis tickFormatter={v => `£${(v/1000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-              <Tooltip content={<CustomTooltip />} />
+              <Tooltip content={<ChartTooltip />} />
               <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
               {plan.debtIds.map((id, i) => (
                 <Area

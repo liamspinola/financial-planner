@@ -1,6 +1,8 @@
+import { API_TIMEOUT_MS } from './constants';
+
 const BASE = '/api';
 
-async function request(method, path, body, timeoutMs = 200000) {
+async function request(method, path, body, timeoutMs = API_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const opts = {
@@ -39,9 +41,33 @@ export const api = {
   deleteExpense:   (id)        => request('DELETE', `/budget/expenses/${id}`),
 
   // Plan
-  generatePlan: () => request('POST', '/plan'),
-  getCachedPlan: () => request('GET', '/plan/cached'),
+  generatePlan:  ()             => request('POST', '/plan'),
+  getCachedPlan: ()             => request('GET',  '/plan/cached'),
+  whatIfPlan:    (extraMonthly) => request('POST', '/plan/whatif', { extraMonthly }, 30000),
 
   // AI
   generateAI: (mode) => request('POST', '/ai', { mode }),
+
+  // Windfalls
+  getWindfalls:    ()            => request('GET',    '/windfalls'),
+  createWindfall:  (w)           => request('POST',   '/windfalls', w),
+  updateWindfall:  (id, w)       => request('PUT',    `/windfalls/${id}`, w),
+  deleteWindfall:  (id)          => request('DELETE', `/windfalls/${id}`),
+
+  // Settings
+  getSettings:  ()        => request('GET', '/settings'),
+  putSettings:  (obj)     => request('PUT', '/settings', obj),
+
+  // Progress snapshots
+  getProgress:     ()         => request('GET',    '/progress'),
+  saveSnapshot:    (s)        => request('POST',   '/progress', s),
+  updateSnapshot:  (id, s)    => request('PUT',    `/progress/${id}`, s),
+  deleteSnapshot:  (id)       => request('DELETE', `/progress/${id}`),
+
+  // Budget actuals
+  getActuals:      (month)      => request('GET',    `/actuals${month ? `?month=${month}` : ''}`),
+  getActualsSummary: (month)    => request('GET',    `/actuals/summary?month=${month}`),
+  createActual:    (a)          => request('POST',   '/actuals', a),
+  updateActual:    (id, a)      => request('PUT',    `/actuals/${id}`, a),
+  deleteActual:    (id)         => request('DELETE', `/actuals/${id}`),
 };

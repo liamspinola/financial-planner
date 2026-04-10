@@ -2,7 +2,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { spawnSync } = require('child_process');
+const { spawn } = require('child_process');
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
@@ -41,7 +41,6 @@ function findClaudeExe() {
 }
 
 const CLAUDE_EXE = findClaudeExe();
-console.log('[AI] Claude CLI resolved to:', CLAUDE_EXE);
 
 function buildPrompt(data, mode) {
   const { summary, debts, tranches, income, expenses, recommendation, comparison } = data;
@@ -132,7 +131,7 @@ function parseResponse(text, mode) {
 }
 
 // POST /api/ai — generate AI narrative, with caching
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   const { mode = 'C' } = req.body;
   if (!['A', 'B', 'C'].includes(mode)) return res.status(400).json({ error: 'Invalid mode' });
   if (mode === 'A') return res.json({ narrative: null, budgetTips: null, cached: false });
@@ -146,8 +145,15 @@ router.post('/', (req, res) => {
   if (debts.length === 0) return res.status(400).json({ error: 'No data to analyse' });
 
   // Check cache
+  const sortById = arr => arr.slice().sort((a, b) => a.id - b.id);
   const inputHash = crypto.createHash('sha256')
-    .update(JSON.stringify({ debts, tranches, income, expenses, mode }))
+    .update(JSON.stringify({
+      debts: sortById(debts),
+      tranches: sortById(tranches),
+      income: sortById(income),
+      expenses: sortById(expenses),
+      mode,
+    }))
     .digest('hex');
 
   const cached = db.prepare('SELECT * FROM plan_cache WHERE id = 1').get();
@@ -176,24 +182,41 @@ router.post('/', (req, res) => {
 
   const prompt = buildPrompt(promptData, mode);
 
-  // Call Claude CLI using the resolved full path to the executable.
-  const result = spawnSync(CLAUDE_EXE, ['-p', prompt], {
-    timeout: 180000, // 3 minutes — Claude CLI can be slow on first call
-    encoding: 'utf8',
-    maxBuffer: 2 * 1024 * 1024,
-    shell: CLAUDE_EXE.endsWith('.cmd'),
+  // Call Claude CLI asynchronously so the event loop stays unblocked.
+  let stdout = '';
+  let stderr = '';
+  let timedOut = false;
+
+  await new Promise((resolve, reject) => {
+    const child = spawn(CLAUDE_EXE, ['-p', prompt], {
+      encoding: 'utf8',
+      maxBuffer: 2 * 1024 * 1024,
+      shell: CLAUDE_EXE.endsWith('.cmd'),
+    });
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill();
+      reject(new Error('Claude CLI timed out after 3 minutes'));
+    }, 180000);
+
+    child.stdout.on('data', chunk => { stdout += chunk; });
+    child.stderr.on('data', chunk => { stderr += chunk; });
+    child.on('error', err => { clearTimeout(timer); reject(err); });
+    child.on('close', code => {
+      clearTimeout(timer);
+      if (timedOut) return; // already rejected
+      if (code !== 0) return reject(new Error('Claude CLI non-zero exit: ' + (stderr || '')));
+      resolve();
+    });
+  }).catch(err => {
+    return res.status(502).json({ error: 'Claude CLI unavailable: ' + err.message });
   });
 
-  if (result.error) {
-    console.error('Claude CLI error:', result.error);
-    return res.status(502).json({ error: 'Claude CLI unavailable: ' + result.error.message });
-  }
-  if (result.status !== 0) {
-    console.error('Claude CLI stderr:', result.stderr);
-    return res.status(502).json({ error: 'Claude CLI returned non-zero exit: ' + (result.stderr || '') });
-  }
+  // res already sent if an error occurred above
+  if (res.headersSent) return;
 
-  const { narrative, budgetTips } = parseResponse(result.stdout, mode);
+  const { narrative, budgetTips } = parseResponse(stdout, mode);
 
   // Update cache with AI content
   db.prepare(`

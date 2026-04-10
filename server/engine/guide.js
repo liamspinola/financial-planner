@@ -32,7 +32,7 @@ function buildGuide(monthlyStates, debtMap, summary) {
   }
 
   for (const state of monthlyStates) {
-    const { month, date, payments, debtsCleared, balances } = state;
+    const { month, date, payments, debtsCleared, balances, windfall, isFundingPhase, fundingSaving } = state;
     const entry = {
       month,
       dateLabel: formatDate(date),
@@ -53,6 +53,27 @@ function buildGuide(monthlyStates, debtMap, summary) {
         label: p.isTarget
           ? `Pay ${formatGbp(p.amount)} to ${p.debtName} — TARGET`
           : `Pay ${formatGbp(p.amount)} to ${p.debtName} (minimum)`,
+      });
+    }
+
+    // Emergency fund phase: note the saving amount as an action
+    if (isFundingPhase && fundingSaving > 0) {
+      entry.actions.push({
+        debtId: null,
+        debtName: 'Emergency Fund',
+        amount: fundingSaving,
+        formatted: formatGbp(fundingSaving),
+        isTarget: false,
+        label: `Save ${formatGbp(fundingSaving)} toward emergency fund`,
+      });
+    }
+
+    // Milestones: windfall applied
+    if (windfall) {
+      entry.milestones.push({
+        type: 'windfall',
+        amount: windfall,
+        message: `Windfall of ${formatGbp(windfall)} applied to target debt this month`,
       });
     }
 

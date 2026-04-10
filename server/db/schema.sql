@@ -44,3 +44,36 @@ CREATE TABLE IF NOT EXISTS plan_cache (
   generated_at TEXT NOT NULL,
   ai_mode TEXT NOT NULL DEFAULT 'C'
 );
+
+CREATE TABLE IF NOT EXISTS windfalls (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  label       TEXT NOT NULL,
+  amount      REAL NOT NULL,
+  apply_month INTEGER NOT NULL,
+  created_at  TEXT DEFAULT (date('now'))
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS progress_snapshots (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  snapshot_month TEXT NOT NULL UNIQUE,
+  recorded_at    TEXT DEFAULT (datetime('now')),
+  total_balance  REAL NOT NULL,
+  balances_json  TEXT NOT NULL,
+  notes          TEXT
+);
+
+CREATE TABLE IF NOT EXISTS spending_actuals (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  expense_id    INTEGER REFERENCES expenses(id) ON DELETE SET NULL,
+  category      TEXT NOT NULL,
+  label         TEXT NOT NULL,
+  amount_actual REAL NOT NULL,
+  record_month  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_spending_actuals_month ON spending_actuals(record_month);
