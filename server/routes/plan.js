@@ -229,18 +229,33 @@ router.post('/lumpsum', (req, res) => {
   baselineDate.setMonth(baselineDate.getMonth() + baseline.payoffMonths);
   const baselineDateStr = `${String(baselineDate.getMonth() + 1).padStart(2, '0')}/${baselineDate.getFullYear()}`;
 
-  // Identify strategy targets from current debtMap
+  // Use projected debt balances at applyMonth-1 so targets reflect which debts are still active then.
+  // monthlyStates[i].balances = {[debtId]: totalBalance} after processing month i+1.
+  // stateIdx = applyMonth-2 gives the state after month applyMonth-1 (just before lump sum arrives).
+  const stateIdx = applyMonth - 2;
+  const projectedBals = stateIdx >= 0 && baseline.monthlyStates[stateIdx]
+    ? baseline.monthlyStates[stateIdx].balances
+    : null;
+
+  function balAtApply(id, g) {
+    if (projectedBals && projectedBals[id] !== undefined) return projectedBals[id];
+    return g.tranches.reduce((s, t) => s + Math.max(0, t.balance), 0);
+  }
+
+  // Identify strategy targets using projected balances at applyMonth
   let avalancheTargetId = null, highestApr = -1;
   for (const [id, g] of debtMap) {
-    for (const t of g.tranches) {
-      if (t.balance > 0 && t.apr > highestApr) { highestApr = t.apr; avalancheTargetId = id; }
+    if (balAtApply(id, g) > 0) {
+      for (const t of g.tranches) {
+        if (t.apr > highestApr) { highestApr = t.apr; avalancheTargetId = id; }
+      }
     }
   }
 
   let snowballTargetId = null, smallestBalance = Infinity;
   for (const [id, g] of debtMap) {
-    const total = g.tranches.reduce((s, t) => s + Math.max(0, t.balance), 0);
-    if (total > 0 && total < smallestBalance) { smallestBalance = total; snowballTargetId = id; }
+    const bal = balAtApply(id, g);
+    if (bal > 0 && bal < smallestBalance) { smallestBalance = bal; snowballTargetId = id; }
   }
 
   // Helper: format a debt-free date string from months offset
@@ -294,18 +309,15 @@ router.post('/lumpsum', (req, res) => {
     });
   }
 
-  // Option 3: Clear & Continue — only if amount covers at least the smallest debt and there are multiple debts
-  if (amount >= smallestBalance && debtMap.size > 1) {
-    const sortedByBalance = [...debtMap.entries()]
-      .filter(([, g]) => g.tranches.reduce((s, t) => s + Math.max(0, t.balance), 0) > 0)
-      .map(([id, g]) => ({
-        id,
-        name: g.debtName,
-        balance: g.tranches.reduce((s, t) => s + Math.max(0, t.balance), 0),
-      }))
-      .sort((a, b) => a.balance - b.balance);
+  // Option 3: Clear & Continue — only if amount covers smallest projected debt and ≥2 debts still active
+  const sortedByBalance = [...debtMap.entries()]
+    .map(([id, g]) => ({ id, name: g.debtName, balance: balAtApply(id, g) }))
+    .filter(e => e.balance > 0)
+    .sort((a, b) => a.balance - b.balance);
 
-    // Compute which debts would be cleared (based on current balances — approximate for future months)
+  if (sortedByBalance.length > 1 && amount >= sortedByBalance[0].balance) {
+
+    // Compute which debts would be cleared using projected balances at applyMonth
     let remaining = amount;
     const cleared = [];
     let remainderTarget = null;

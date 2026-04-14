@@ -257,7 +257,7 @@ export default function Plan() {
                     <>
                       <input className="input flex-1 py-1 text-xs" placeholder="Label" value={wfForm.label} onChange={e => setWfForm(f => ({ ...f, label: e.target.value }))} />
                       <input className="input w-24 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={wfForm.amount} onChange={e => setWfForm(f => ({ ...f, amount: e.target.value }))} />
-                      <input className="input w-20 py-1 text-xs" type="number" min="1" placeholder="Month #" value={wfForm.apply_month} onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))} />
+                      <input className="input w-20 py-1 text-xs" type="number" min="1" max={plan?.payoffMonths || undefined} placeholder="Month #" value={wfForm.apply_month} onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))} />
                       <button onClick={saveWindfall} className="btn-sm-teal text-xs">Save</button>
                       <button onClick={() => { setEditingWf(null); setWfForm({ label: '', amount: '', apply_month: '' }); }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
                     </>
@@ -280,14 +280,17 @@ export default function Plan() {
             <div className="flex items-center gap-2 flex-wrap">
               <input className="input flex-1 min-w-[120px] py-1 text-xs" placeholder="Label (e.g. Tax rebate)" value={wfForm.label} onChange={e => setWfForm(f => ({ ...f, label: e.target.value }))} />
               <input className="input w-28 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={wfForm.amount} onChange={e => setWfForm(f => ({ ...f, amount: e.target.value }))} />
-              <input className="input w-24 py-1 text-xs" type="number" min="1" placeholder="Month #" value={wfForm.apply_month} onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))} />
+              <div className="flex items-center gap-1">
+                <input className="input w-24 py-1 text-xs" type="number" min="1" max={plan?.payoffMonths || undefined} placeholder="Month #" value={wfForm.apply_month} onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))} />
+                {plan && <span className="text-[10px] text-slate-600 whitespace-nowrap">of {plan.payoffMonths}</span>}
+              </div>
               <button onClick={saveWindfall} disabled={!wfForm.label || !wfForm.amount || !wfForm.apply_month} className="btn-sm-teal text-xs disabled:opacity-40"><Plus size={12} /> Add windfall</button>
             </div>
           )}
         </div>
       </div>
 
-      {plan && <LumpSumAdvisor onWindfallSaved={loadWindfalls} />}
+      {plan && <LumpSumAdvisor onWindfallSaved={loadWindfalls} planMonths={plan.payoffMonths} />}
 
       {!plan && !generating && (
         <div className="card p-12 text-center text-slate-500">

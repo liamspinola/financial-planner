@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 import { gbp, monthsLabel, aprPct } from '../lib/format';
@@ -113,12 +113,22 @@ function OptionCard({ option, amount, applyMonth, onWindfallSaved }) {
   );
 }
 
-export default function LumpSumAdvisor({ onWindfallSaved }) {
+export default function LumpSumAdvisor({ onWindfallSaved, planMonths }) {
   const [amount, setAmount] = useState('');
   const [applyMonth, setApplyMonth] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+
+  const maxMonth = planMonths || 60;
+
+  // Clamp applyMonth if the plan shortens (e.g. after re-generating with fewer debts)
+  useEffect(() => {
+    if (planMonths && applyMonth > planMonths) {
+      setApplyMonth(1);
+      setResult(null);
+    }
+  }, [planMonths]);
 
   async function handleAnalyse() {
     const num = parseFloat(amount);
@@ -169,7 +179,7 @@ export default function LumpSumAdvisor({ onWindfallSaved }) {
             onChange={e => { setApplyMonth(Number(e.target.value)); setResult(null); }}
             className="bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-teal-500"
           >
-            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+            {Array.from({ length: maxMonth }, (_, i) => i + 1).map(m => (
               <option key={m} value={m}>Month {m}</option>
             ))}
           </select>
