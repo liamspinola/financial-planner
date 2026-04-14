@@ -48,3 +48,13 @@ export function monthsLabel(months) {
   const mo  = months % 12;
   return mo > 0 ? `${months} months (${yrs} yr${yrs > 1 ? 's' : ''} ${mo} mo)` : `${months} months (${yrs} yr${yrs > 1 ? 's' : ''})`;
 }
+
+/**
+ * Format a YYYY-MM-DD (or YYYY-MM) string as "Apr 2026"
+ */
+export function formatMonthLabel(isoDate) {
+  if (!isoDate) return '';
+  const [year, month] = isoDate.split('-');
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return `${MONTHS[parseInt(month, 10) - 1]} ${year}`;
+}

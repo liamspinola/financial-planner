@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { flushSync } from 'react-dom';
 import { Printer, RefreshCw, TrendingDown, Info, Plus, Edit2, Trash2 } from 'lucide-react';
 import {
@@ -6,7 +6,7 @@ import {
   Legend, ReferenceLine,
 } from 'recharts';
 import { api } from '../lib/api';
-import { gbp, monthsLabel } from '../lib/format';
+import { gbp, monthsLabel, formatMonthLabel } from '../lib/format';
 import PageHeader from '../components/PageHeader';
 import Spinner from '../components/Spinner';
 import ChartTooltip from '../components/ChartTooltip';
@@ -190,9 +190,14 @@ export default function Plan() {
   }
 
   // Milestones for reference lines (paid off months)
-  const paidOffMonths = plan?.guide?.flatMap(e =>
-    e.milestones.filter(m => m.type === 'paid_off').map(() => e.month)
+  const paidOffDates = plan?.guide?.flatMap(e =>
+    e.milestones.filter(m => m.type === 'paid_off').map(() => e.isoDate)
   ) || [];
+
+  const monthDateMap = useMemo(
+    () => Object.fromEntries((plan?.chartData || []).map(p => [p.month, p.date])),
+    [plan?.chartData]
+  );
 
   return (
     <div className="p-8">
@@ -257,7 +262,16 @@ export default function Plan() {
                     <>
                       <input className="input flex-1 py-1 text-xs" placeholder="Label" value={wfForm.label} onChange={e => setWfForm(f => ({ ...f, label: e.target.value }))} />
                       <input className="input w-24 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={wfForm.amount} onChange={e => setWfForm(f => ({ ...f, amount: e.target.value }))} />
-                      <input className="input w-20 py-1 text-xs" type="number" min="1" max={plan?.payoffMonths || undefined} placeholder="Month #" value={wfForm.apply_month} onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))} />
+                      <select
+                        className="input py-1 text-xs"
+                        value={wfForm.apply_month}
+                        onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))}
+                      >
+                        <option value="">Select month</option>
+                        {(plan?.chartData || []).map(p => (
+                          <option key={p.month} value={p.month}>{formatMonthLabel(p.date)}</option>
+                        ))}
+                      </select>
                       <button onClick={saveWindfall} className="btn-sm-teal text-xs">Save</button>
                       <button onClick={() => { setEditingWf(null); setWfForm({ label: '', amount: '', apply_month: '' }); }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
                     </>
@@ -265,7 +279,9 @@ export default function Plan() {
                     <>
                       <span className="text-violet-400 font-medium">£{w.amount.toLocaleString('en-GB')}</span>
                       <span className="text-slate-300">{w.label}</span>
-                      <span className="text-slate-500">month {w.apply_month}</span>
+                      <span className="text-slate-500">
+                        {monthDateMap[w.apply_month] ? formatMonthLabel(monthDateMap[w.apply_month]) : `month ${w.apply_month}`}
+                      </span>
                       <div className="ml-auto flex gap-1">
                         <button onClick={() => { setEditingWf(w.id); setWfForm({ label: w.label, amount: w.amount, apply_month: w.apply_month }); }} className="p-1 text-slate-400 hover:text-slate-200"><Edit2 size={11} /></button>
                         <button onClick={() => deleteWindfall(w.id)} className="p-1 text-slate-400 hover:text-red-400"><Trash2 size={11} /></button>
@@ -280,17 +296,23 @@ export default function Plan() {
             <div className="flex items-center gap-2 flex-wrap">
               <input className="input flex-1 min-w-[120px] py-1 text-xs" placeholder="Label (e.g. Tax rebate)" value={wfForm.label} onChange={e => setWfForm(f => ({ ...f, label: e.target.value }))} />
               <input className="input w-28 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={wfForm.amount} onChange={e => setWfForm(f => ({ ...f, amount: e.target.value }))} />
-              <div className="flex items-center gap-1">
-                <input className="input w-24 py-1 text-xs" type="number" min="1" max={plan?.payoffMonths || undefined} placeholder="Month #" value={wfForm.apply_month} onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))} />
-                {plan && <span className="text-[10px] text-slate-600 whitespace-nowrap">of {plan.payoffMonths}</span>}
-              </div>
+              <select
+                className="input py-1 text-xs"
+                value={wfForm.apply_month}
+                onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))}
+              >
+                <option value="">Select month</option>
+                {(plan?.chartData || []).map(p => (
+                  <option key={p.month} value={p.month}>{formatMonthLabel(p.date)}</option>
+                ))}
+              </select>
               <button onClick={saveWindfall} disabled={!wfForm.label || !wfForm.amount || !wfForm.apply_month} className="btn-sm-teal text-xs disabled:opacity-40"><Plus size={12} /> Add windfall</button>
             </div>
           )}
         </div>
       </div>
 
-      {plan && <LumpSumAdvisor onWindfallSaved={loadWindfalls} planMonths={plan.payoffMonths} />}
+      {plan && <LumpSumAdvisor onWindfallSaved={loadWindfalls} planMonths={plan.payoffMonths} planChartData={plan.chartData} />}
 
       {!plan && !generating && (
         <div className="card p-12 text-center text-slate-500">
@@ -432,12 +454,17 @@ export default function Plan() {
               <div ref={chartContainerRef} className="print-chart-container" style={{ width: '100%' }}>
                 <LineChart width={chartWidth} height={300} data={plan.chartData} margin={{ top: 4, right: 16, bottom: 0, left: 16 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={formatMonthLabel}
+                    interval="preserveStartEnd"
+                    tick={{ fill: '#94a3b8', fontSize: 11 }}
+                  />
                   <YAxis tickFormatter={v => `£${(v/1000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
                   <Tooltip content={<ChartTooltip />} />
                   <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-                  {paidOffMonths.map((m, i) => (
-                    <ReferenceLine key={i} x={m} stroke="#22c55e" strokeDasharray="4 4" strokeWidth={1} />
+                  {paidOffDates.map((d, i) => (
+                    <ReferenceLine key={i} x={d} stroke="#22c55e" strokeDasharray="4 4" strokeWidth={1} />
                   ))}
                   {plan.debtIds.map((id, i) => (
                     <Line

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { CheckCircle, Zap } from 'lucide-react';
 import { api } from '../lib/api';
-import { gbp, monthsLabel, aprPct } from '../lib/format';
+import { gbp, monthsLabel, aprPct, formatMonthLabel } from '../lib/format';
 import Spinner from './Spinner';
 
 function OptionCard({ option, amount, applyMonth, onWindfallSaved }) {
@@ -113,7 +113,7 @@ function OptionCard({ option, amount, applyMonth, onWindfallSaved }) {
   );
 }
 
-export default function LumpSumAdvisor({ onWindfallSaved, planMonths }) {
+export default function LumpSumAdvisor({ onWindfallSaved, planMonths, planChartData }) {
   const [amount, setAmount] = useState('');
   const [applyMonth, setApplyMonth] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -179,8 +179,10 @@ export default function LumpSumAdvisor({ onWindfallSaved, planMonths }) {
             onChange={e => { setApplyMonth(Number(e.target.value)); setResult(null); }}
             className="bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-teal-500"
           >
-            {Array.from({ length: maxMonth }, (_, i) => i + 1).map(m => (
-              <option key={m} value={m}>Month {m}</option>
+            {(planChartData || Array.from({ length: maxMonth }, (_, i) => ({ month: i + 1, date: null }))).map(p => (
+              <option key={p.month} value={p.month}>
+                {p.date ? formatMonthLabel(p.date) : `Month ${p.month}`}
+              </option>
             ))}
           </select>
         </div>

@@ -1,10 +1,10 @@
-import { gbp } from '../lib/format';
+import { gbp, formatMonthLabel } from '../lib/format';
 
 export default function ChartTooltip({ active, payload, label }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-navy-800 border border-slate-700 rounded-lg p-3 text-xs shadow-xl">
-      <p className="text-slate-400 mb-2">Month {label}</p>
+      <p className="text-slate-400 mb-2">{formatMonthLabel(label)}</p>
       {payload.map((p, i) => (
         <div key={i} className="flex items-center gap-2 mb-1">
           <div className="w-2 h-2 rounded-full" style={{ background: p.color }} />
