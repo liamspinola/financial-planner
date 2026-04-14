@@ -287,6 +287,8 @@ export default function Plan() {
         </div>
       </div>
 
+      {plan && <LumpSumAdvisor onWindfallSaved={loadWindfalls} />}
+
       {!plan && !generating && (
         <div className="card p-12 text-center text-slate-500">
           <TrendingDown size={40} className="mx-auto mb-3 opacity-20" />
@@ -419,9 +421,6 @@ export default function Plan() {
               </div>
             )}
           </div>
-
-          {/* Lump Sum Advisor */}
-          <LumpSumAdvisor onWindfallSaved={loadWindfalls} />
 
           {/* Timeline chart */}
           {plan.chartData?.length > 0 && (

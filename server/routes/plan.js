@@ -223,33 +223,6 @@ router.post('/lumpsum', (req, res) => {
   const debtMap   = groupTranchsByDebt(debts, tranches);
   const startDate = new Date();
 
-  // Deep-clone the debt map (mirrors cloneGroups in amortisation.js, which is not exported)
-  function cloneDebtMap(map) {
-    const clone = new Map();
-    for (const [id, group] of map) {
-      clone.set(id, { ...group, tranches: group.tranches.map(t => ({ ...t })) });
-    }
-    return clone;
-  }
-
-  // Apply lump sum to a specific debt's tranches, highest-APR first (FCA CONC 6.7)
-  function applyLump(map, targetDebtId, lumpAmount) {
-    const group = map.get(targetDebtId);
-    if (!group) return;
-    let remaining = lumpAmount;
-    const sorted = [...group.tranches]
-      .filter(t => t.balance > 0)
-      .sort((a, b) => b.apr - a.apr);
-    for (const t of sorted) {
-      if (remaining <= 0) break;
-      const original = group.tranches.find(x => x.id === t.id);
-      const applied = Math.min(remaining, original.balance);
-      original.balance -= applied;
-      if (original.balance < 0.005) original.balance = 0;
-      remaining -= applied;
-    }
-  }
-
   // Baseline simulation (no lump sum)
   const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay);
   const baselineDate = new Date(startDate);
@@ -281,9 +254,8 @@ router.post('/lumpsum', (req, res) => {
 
   // Option 1: Avalanche — apply to highest-APR debt
   if (avalancheTargetId !== null) {
-    const avMap = cloneDebtMap(debtMap);
-    applyLump(avMap, avalancheTargetId, amount);
-    const avSim = simulate(avMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay);
+    const avSim = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate,
+      [...windfalls, { apply_month: applyMonth, amount }], fundingDelay);
     const avGroup = debtMap.get(avalancheTargetId);
     options.push({
       id: 'avalanche',
@@ -303,9 +275,8 @@ router.post('/lumpsum', (req, res) => {
 
   // Option 2: Snowball — apply to smallest-balance debt (only if different from avalanche target)
   if (snowballTargetId !== null && snowballTargetId !== avalancheTargetId) {
-    const sbMap = cloneDebtMap(debtMap);
-    applyLump(sbMap, snowballTargetId, amount);
-    const sbSim = simulate(sbMap, summary.availableForDebt, 'snowball', startDate, windfalls, fundingDelay);
+    const sbSim = simulate(debtMap, summary.availableForDebt, 'snowball', startDate,
+      [...windfalls, { apply_month: applyMonth, amount }], fundingDelay);
     const sbGroup = debtMap.get(snowballTargetId);
     options.push({
       id: 'snowball',
@@ -334,49 +305,26 @@ router.post('/lumpsum', (req, res) => {
       }))
       .sort((a, b) => a.balance - b.balance);
 
-    const ccMap = cloneDebtMap(debtMap);
+    // Compute which debts would be cleared (based on current balances — approximate for future months)
     let remaining = amount;
     const cleared = [];
+    let remainderTarget = null;
 
     for (const entry of sortedByBalance) {
       if (remaining <= 0) break;
       if (entry.balance <= remaining) {
-        ccMap.get(entry.id).tranches.forEach(t => { t.balance = 0; });
         cleared.push({ debtId: entry.id, debtName: entry.name, amount: entry.balance });
         remaining -= entry.balance;
       } else {
-        applyLump(ccMap, entry.id, remaining);
+        remainderTarget = { debtId: entry.id, debtName: entry.name };
         remaining = 0;
         break;
       }
     }
 
-    // Apply any leftover remainder to the highest-APR debt still with a balance
-    if (remaining > 0) {
-      let maxApr = -1, remainderTargetId = null;
-      for (const [id, g] of ccMap) {
-        for (const t of g.tranches) {
-          if (t.balance > 0 && t.apr > maxApr) { maxApr = t.apr; remainderTargetId = id; }
-        }
-      }
-      if (remainderTargetId) applyLump(ccMap, remainderTargetId, remaining);
-    }
-
     if (cleared.length > 0) {
-      const ccSim = simulate(ccMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay);
-
-      // Find where the remainder went (first debt with reduced-but-nonzero balance)
-      let remainderTarget = null;
-      for (const entry of sortedByBalance) {
-        const orig = debtMap.get(entry.id);
-        const after = ccMap.get(entry.id);
-        const origBal = orig.tranches.reduce((s, t) => s + t.balance, 0);
-        const afterBal = after.tranches.reduce((s, t) => s + t.balance, 0);
-        if (afterBal > 0 && afterBal < origBal) {
-          remainderTarget = { debtId: entry.id, debtName: entry.name };
-          break;
-        }
-      }
+      const ccSim = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate,
+        [...windfalls, { apply_month: applyMonth, amount }], fundingDelay);
 
       const clearedNames = cleared.map(c => c.debtName);
       options.push({
