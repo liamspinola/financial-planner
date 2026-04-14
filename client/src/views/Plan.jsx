@@ -10,6 +10,7 @@ import { gbp, monthsLabel } from '../lib/format';
 import PageHeader from '../components/PageHeader';
 import Spinner from '../components/Spinner';
 import ChartTooltip from '../components/ChartTooltip';
+import LumpSumAdvisor from '../components/LumpSumAdvisor';
 import { DEBT_COLORS } from '../lib/constants';
 
 // Convert **text** to <strong> spans inline, returning mixed text/element array
@@ -418,6 +419,9 @@ export default function Plan() {
               </div>
             )}
           </div>
+
+          {/* Lump Sum Advisor */}
+          <LumpSumAdvisor onWindfallSaved={loadWindfalls} />
 
           {/* Timeline chart */}
           {plan.chartData?.length > 0 && (
