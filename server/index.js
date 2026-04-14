@@ -21,6 +21,7 @@ app.use('/api/windfalls', require('./routes/windfalls'));
 app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/progress',  require('./routes/progress'));
 app.use('/api/actuals',   require('./routes/actuals'));
+app.use('/api/advisor',   require('./routes/advisor'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
