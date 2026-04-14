@@ -2,45 +2,9 @@
 
 const express = require('express');
 const router = express.Router();
-const { spawn } = require('child_process');
 const crypto = require('crypto');
-const fs = require('fs');
-const path = require('path');
 const { getDb } = require('../db/database');
-
-/**
- * Resolve the Claude CLI executable path.
- * Checks the Windows desktop app install (versioned directory), then npm global,
- * then falls back to 'claude' (assumes it's in PATH).
- */
-function findClaudeExe() {
-  // 1. Desktop app (Windows Store / MSIX package) — pick the highest version dir
-  const desktopBase = path.join(
-    process.env.LOCALAPPDATA || '',
-    'Packages',
-    'Claude_pzs8sxrjxfjjc',
-    'LocalCache',
-    'Roaming',
-    'Claude',
-    'claude-code'
-  );
-  if (fs.existsSync(desktopBase)) {
-    const versions = fs.readdirSync(desktopBase).sort().reverse();
-    for (const v of versions) {
-      const exe = path.join(desktopBase, v, 'claude.exe');
-      if (fs.existsSync(exe)) return exe;
-    }
-  }
-
-  // 2. npm global install (claude.cmd)
-  const npmCmd = path.join(process.env.APPDATA || '', 'npm', 'claude.cmd');
-  if (fs.existsSync(npmCmd)) return npmCmd;
-
-  // 3. Fallback — rely on system PATH
-  return 'claude';
-}
-
-const CLAUDE_EXE = findClaudeExe();
+const { callClaude } = require('../lib/claude');
 
 function buildPrompt(data, mode) {
   const { summary, debts, tranches, income, expenses, recommendation, comparison } = data;
@@ -182,39 +146,12 @@ router.post('/', async (req, res) => {
 
   const prompt = buildPrompt(promptData, mode);
 
-  // Call Claude CLI asynchronously so the event loop stays unblocked.
-  let stdout = '';
-  let stderr = '';
-  let timedOut = false;
-
-  await new Promise((resolve, reject) => {
-    const child = spawn(CLAUDE_EXE, ['-p', prompt], {
-      encoding: 'utf8',
-      maxBuffer: 2 * 1024 * 1024,
-      shell: CLAUDE_EXE.endsWith('.cmd'),
-    });
-
-    const timer = setTimeout(() => {
-      timedOut = true;
-      child.kill();
-      reject(new Error('Claude CLI timed out after 3 minutes'));
-    }, 180000);
-
-    child.stdout.on('data', chunk => { stdout += chunk; });
-    child.stderr.on('data', chunk => { stderr += chunk; });
-    child.on('error', err => { clearTimeout(timer); reject(err); });
-    child.on('close', code => {
-      clearTimeout(timer);
-      if (timedOut) return; // already rejected
-      if (code !== 0) return reject(new Error('Claude CLI non-zero exit: ' + (stderr || '')));
-      resolve();
-    });
-  }).catch(err => {
+  let stdout;
+  try {
+    stdout = await callClaude(prompt, 180000);
+  } catch (err) {
     return res.status(502).json({ error: 'Claude CLI unavailable: ' + err.message });
-  });
-
-  // res already sent if an error occurred above
-  if (res.headersSent) return;
+  }
 
   const { narrative, budgetTips } = parseResponse(stdout, mode);
 
