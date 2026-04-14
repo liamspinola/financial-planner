@@ -158,6 +158,7 @@ function ChatPanel({ conv, onContextToggle, onTitleUpdate }) {
   const messagesEndRef  = useRef(null);
   const textareaRef     = useRef(null);
   const typewriterTimer = useRef(null);
+  const finishTimerRef  = useRef(null);
   const hasMessages     = messages.length > 0 || sending;
 
   // Scroll to bottom whenever messages or typewriter text changes
@@ -173,6 +174,7 @@ function ChatPanel({ conv, onContextToggle, onTitleUpdate }) {
     setError(null);
     setInput('');
     clearInterval(typewriterTimer.current);
+    clearTimeout(finishTimerRef.current);
     setLoadingMsgs(true);
     api.getMessages(conv.id)
       .then(setMessages)
@@ -223,7 +225,7 @@ function ChatPanel({ conv, onContextToggle, onTitleUpdate }) {
       // After the typewriter duration, replace the placeholder with the real content
       const wordCount  = assistantMessage.content.split(' ').length;
       const durationMs = Math.ceil(wordCount / 2) * 66 + 300;
-      setTimeout(() => {
+      finishTimerRef.current = setTimeout(() => {
         setMessages(prev =>
           prev.map(m => m.id === assistantMessage.id ? assistantMessage : m)
         );
@@ -390,10 +392,16 @@ export default function Advisor() {
 
   async function handleDelete(id) {
     await api.deleteConversation(id);
-    const remaining = conversations.filter(c => c.id !== id);
-    setConversations(remaining);
-    if (activeId === id) setActiveId(remaining.length > 0 ? remaining[0].id : null);
+    setConversations(prev => prev.filter(c => c.id !== id));
+    setActiveId(current => current === id ? null : current);
   }
+
+  // Auto-select the first conversation whenever active is cleared but sessions remain
+  useEffect(() => {
+    if (activeId === null && conversations.length > 0) {
+      setActiveId(conversations[0].id);
+    }
+  }, [activeId, conversations]);
 
   async function handleRename(id, title) {
     const updated = await api.patchConversation(id, { title });
