@@ -44,6 +44,7 @@ export const api = {
   generatePlan:  ()             => request('POST', '/plan'),
   getCachedPlan: ()             => request('GET',  '/plan/cached'),
   whatIfPlan:    (extraMonthly) => request('POST', '/plan/whatif', { extraMonthly }, 30000),
+  lumpsumAdvise: (amount, applyMonth) => request('POST', '/plan/lumpsum', { amount, applyMonth }, 30000),
 
   // AI
   generateAI: (mode) => request('POST', '/ai', { mode }),
@@ -70,4 +71,12 @@ export const api = {
   createActual:    (a)          => request('POST',   '/actuals', a),
   updateActual:    (id, a)      => request('PUT',    `/actuals/${id}`, a),
   deleteActual:    (id)         => request('DELETE', `/actuals/${id}`),
+
+  // Advisor
+  getConversations:   ()              => request('GET',    '/advisor/conversations'),
+  createConversation: ()              => request('POST',   '/advisor/conversations'),
+  patchConversation:  (id, data)      => request('PATCH',  `/advisor/conversations/${id}`, data),
+  deleteConversation: (id)            => request('DELETE', `/advisor/conversations/${id}`),
+  getMessages:        (id)            => request('GET',    `/advisor/conversations/${id}/messages`),
+  sendMessage:        (id, content)   => request('POST',   `/advisor/conversations/${id}/messages`, { content }, 90000),
 };
