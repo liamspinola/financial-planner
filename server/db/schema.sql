@@ -77,3 +77,32 @@ CREATE TABLE IF NOT EXISTS spending_actuals (
 );
 
 CREATE INDEX IF NOT EXISTS idx_spending_actuals_month ON spending_actuals(record_month);
+
+CREATE TABLE IF NOT EXISTS conversations (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  title            TEXT    NOT NULL DEFAULT 'New conversation',
+  use_context      INTEGER NOT NULL DEFAULT 1 CHECK (use_context IN (0, 1)),
+  context_snapshot TEXT,
+  summary          TEXT,
+  deleted_at       TEXT,
+  created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_conversations_active
+  ON conversations (updated_at DESC)
+  WHERE deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS messages (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  conversation_id  INTEGER NOT NULL
+                   REFERENCES conversations (id) ON DELETE CASCADE,
+  role             TEXT    NOT NULL CHECK (role IN ('user', 'assistant')),
+  content          TEXT    NOT NULL,
+  sequence         INTEGER NOT NULL,
+  created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (conversation_id, sequence)
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_conv_seq
+  ON messages (conversation_id, sequence);
