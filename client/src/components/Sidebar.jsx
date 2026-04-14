@@ -1,11 +1,12 @@
 import { NavLink } from 'react-router-dom';
-import { LayoutDashboard, CreditCard, Wallet, BarChart3, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, CreditCard, Wallet, BarChart3, MessageSquare, TrendingUp } from 'lucide-react';
 
 const NAV = [
   { to: '/',          icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/debts',     icon: CreditCard,      label: 'Debts'     },
   { to: '/budget',    icon: Wallet,          label: 'Budget'    },
   { to: '/plan',      icon: BarChart3,       label: 'Plan'      },
+  { to: '/advisor',   icon: MessageSquare,   label: 'Advisor'   },
   { to: '/progress',  icon: TrendingUp,      label: 'Progress'  },
 ];
 
