@@ -55,6 +55,12 @@ export const api = {
   updateWindfall:  (id, w)       => request('PUT',    `/windfalls/${id}`, w),
   deleteWindfall:  (id)          => request('DELETE', `/windfalls/${id}`),
 
+  // Expense events
+  getExpenseEvents:   ()         => request('GET',    '/expense-events'),
+  createExpenseEvent: (e)        => request('POST',   '/expense-events', e),
+  updateExpenseEvent: (id, e)    => request('PUT',    `/expense-events/${id}`, e),
+  deleteExpenseEvent: (id)       => request('DELETE', `/expense-events/${id}`),
+
   // Settings
   getSettings:  ()        => request('GET', '/settings'),
   putSettings:  (obj)     => request('PUT', '/settings', obj),

@@ -23,7 +23,8 @@ router.post('/', (req, res) => {
   const tranches  = db.prepare('SELECT * FROM tranches').all();
   const income    = db.prepare('SELECT * FROM income_sources').all();
   const expenses  = db.prepare('SELECT * FROM expenses').all();
-  const windfalls = db.prepare('SELECT * FROM windfalls ORDER BY apply_month ASC').all();
+  const windfalls     = db.prepare('SELECT * FROM windfalls ORDER BY apply_month ASC').all();
+  const expenseEvents = db.prepare('SELECT * FROM expense_events ORDER BY apply_month ASC').all();
 
   if (debts.length === 0) return res.status(400).json({ error: 'No debts entered' });
   if (income.length === 0) return res.status(400).json({ error: 'No income entered' });
@@ -51,8 +52,8 @@ router.post('/', (req, res) => {
   const debtMap = groupTranchsByDebt(debts, tranches);
   const startDate = new Date();
 
-  const avalanche = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay);
-  const snowball  = simulate(debtMap, summary.availableForDebt, 'snowball',  startDate, windfalls, fundingDelay);
+  const avalanche = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay, expenseEvents);
+  const snowball  = simulate(debtMap, summary.availableForDebt, 'snowball',  startDate, windfalls, fundingDelay, expenseEvents);
   const { recommended, reason, interestSaved, monthsSaved } = recommend(avalanche, snowball);
 
   const winning = recommended === 'avalanche' ? avalanche : snowball;
@@ -120,6 +121,7 @@ router.post('/', (req, res) => {
       income: sortById(income),
       expenses: sortById(expenses),
       windfalls: sortById(windfalls),
+      expenseEvents: sortById(expenseEvents),
     }))
     .digest('hex');
 
@@ -140,10 +142,12 @@ router.post('/whatif', (req, res) => {
     return res.status(400).json({ error: 'extraMonthly must be a non-negative number' });
   }
 
-  const debts    = db.prepare('SELECT * FROM debts').all();
-  const tranches = db.prepare('SELECT * FROM tranches').all();
-  const income   = db.prepare('SELECT * FROM income_sources').all();
-  const expenses = db.prepare('SELECT * FROM expenses').all();
+  const debts         = db.prepare('SELECT * FROM debts').all();
+  const tranches      = db.prepare('SELECT * FROM tranches').all();
+  const income        = db.prepare('SELECT * FROM income_sources').all();
+  const expenses      = db.prepare('SELECT * FROM expenses').all();
+  const windfalls     = db.prepare('SELECT * FROM windfalls ORDER BY apply_month ASC').all();
+  const expenseEvents = db.prepare('SELECT * FROM expense_events ORDER BY apply_month ASC').all();
 
   if (debts.length === 0) return res.status(400).json({ error: 'No debts entered' });
   if (income.length === 0) return res.status(400).json({ error: 'No income entered' });
@@ -154,8 +158,8 @@ router.post('/whatif', (req, res) => {
   const debtMap   = groupTranchsByDebt(debts, tranches);
   const startDate = new Date();
 
-  const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate);
-  const scenario = simulate(debtMap, summary.availableForDebt + extraMonthly, 'avalanche', startDate);
+  const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, 0, expenseEvents);
+  const scenario = simulate(debtMap, summary.availableForDebt + extraMonthly, 'avalanche', startDate, windfalls, 0, expenseEvents);
 
   res.json({
     baseline: {
@@ -189,7 +193,8 @@ router.post('/lumpsum', (req, res) => {
   const tranches  = db.prepare('SELECT * FROM tranches').all();
   const income    = db.prepare('SELECT * FROM income_sources').all();
   const expenses  = db.prepare('SELECT * FROM expenses').all();
-  const windfalls = db.prepare('SELECT * FROM windfalls ORDER BY apply_month ASC').all();
+  const windfalls     = db.prepare('SELECT * FROM windfalls ORDER BY apply_month ASC').all();
+  const expenseEvents = db.prepare('SELECT * FROM expense_events ORDER BY apply_month ASC').all();
 
   if (debts.length === 0) return res.status(400).json({ error: 'No debts entered' });
   if (income.length === 0) return res.status(400).json({ error: 'No income entered' });
@@ -210,7 +215,7 @@ router.post('/lumpsum', (req, res) => {
   const startDate = new Date();
 
   // Baseline simulation (no lump sum)
-  const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay);
+  const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay, expenseEvents);
   const baselineDateStr = formatDebtFreeDate(startDate, baseline.payoffMonths);
 
   // Use projected debt balances at applyMonth-1 so targets reflect which debts are still active then.
@@ -247,7 +252,7 @@ router.post('/lumpsum', (req, res) => {
   // Option 1: Avalanche — apply to highest-APR debt
   if (avalancheTargetId !== null) {
     const avSim = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate,
-      [...windfalls, { apply_month: applyMonth, amount }], fundingDelay);
+      [...windfalls, { apply_month: applyMonth, amount }], fundingDelay, expenseEvents);
     const avGroup = debtMap.get(avalancheTargetId);
     options.push({
       id: 'avalanche',
@@ -268,7 +273,7 @@ router.post('/lumpsum', (req, res) => {
   // Option 2: Snowball — apply to smallest-balance debt (only if different from avalanche target)
   if (snowballTargetId !== null && snowballTargetId !== avalancheTargetId) {
     const sbSim = simulate(debtMap, summary.availableForDebt, 'snowball', startDate,
-      [...windfalls, { apply_month: applyMonth, amount }], fundingDelay);
+      [...windfalls, { apply_month: applyMonth, amount }], fundingDelay, expenseEvents);
     const sbGroup = debtMap.get(snowballTargetId);
     options.push({
       id: 'snowball',
@@ -313,7 +318,7 @@ router.post('/lumpsum', (req, res) => {
 
     if (cleared.length > 0) {
       const ccSim = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate,
-        [...windfalls, { apply_month: applyMonth, amount }], fundingDelay);
+        [...windfalls, { apply_month: applyMonth, amount }], fundingDelay, expenseEvents);
 
       const clearedNames = cleared.map(c => c.debtName);
       options.push({

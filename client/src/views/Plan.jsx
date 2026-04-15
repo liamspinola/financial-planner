@@ -60,9 +60,10 @@ function GuideEntry({ entry }) {
           m.type === 'promo_warning' ? 'text-amber-400' :
           m.type === 'halfway'       ? 'text-teal-400'  :
           m.type === 'final'         ? 'text-green-300' :
-          m.type === 'windfall'      ? 'text-violet-400' : 'text-slate-400'
+          m.type === 'windfall'      ? 'text-violet-400' :
+          m.type === 'expense_hit'   ? 'text-red-400' : 'text-slate-400'
         }`}>
-          {m.type === 'paid_off' ? '🎉 ' : m.type === 'promo_warning' ? '⚠ ' : m.type === 'halfway' ? '📍 ' : m.type === 'final' ? '✅ ' : m.type === 'windfall' ? '💰 ' : ''}
+          {m.type === 'paid_off' ? '🎉 ' : m.type === 'promo_warning' ? '⚠ ' : m.type === 'halfway' ? '📍 ' : m.type === 'final' ? '✅ ' : m.type === 'windfall' ? '💰 ' : m.type === 'expense_hit' ? '💸 ' : ''}
           {m.message}
         </p>
       ))}
@@ -91,7 +92,12 @@ export default function Plan() {
   const [wfForm, setWfForm] = useState({ label: '', amount: '', apply_month: '' });
   const [editingWf, setEditingWf] = useState(null); // id being edited
 
-  useEffect(() => { loadCached(); loadWindfalls(); }, []);
+  // Expense events state
+  const [expenseEvents, setExpenseEvents] = useState([]);
+  const [evForm, setEvForm] = useState({ label: '', amount: '', apply_month: '', category: 'expected' });
+  const [editingEv, setEditingEv] = useState(null); // id being edited
+
+  useEffect(() => { loadCached(); loadWindfalls(); loadExpenseEvents(); }, []);
 
   // Measure container width for the chart so it fills the card on screen
   useEffect(() => {
@@ -117,6 +123,10 @@ export default function Plan() {
     try { setWindfalls(await api.getWindfalls()); } catch { /* ignore */ }
   }
 
+  async function loadExpenseEvents() {
+    try { setExpenseEvents(await api.getExpenseEvents()); } catch { /* non-critical */ }
+  }
+
   async function saveWindfall() {
     const payload = {
       label: wfForm.label.trim(),
@@ -138,6 +148,35 @@ export default function Plan() {
   async function deleteWindfall(id) {
     await api.deleteWindfall(id);
     setWindfalls(ws => ws.filter(w => w.id !== id));
+  }
+
+  async function saveExpenseEvent() {
+    const payload = {
+      label: evForm.label.trim(),
+      amount: parseFloat(evForm.amount),
+      apply_month: parseInt(evForm.apply_month, 10),
+      category: evForm.category,
+    };
+    if (!payload.label || isNaN(payload.amount) || isNaN(payload.apply_month)) return;
+    try {
+      if (editingEv !== null) {
+        await api.updateExpenseEvent(editingEv, payload);
+        setEditingEv(null);
+      } else {
+        await api.createExpenseEvent(payload);
+      }
+      setEvForm({ label: '', amount: '', apply_month: '', category: 'expected' });
+      await loadExpenseEvents();
+      if (plan) generate();
+    } catch (err) {
+      console.error('Failed to save expense event', err);
+    }
+  }
+
+  async function deleteExpenseEvent(id) {
+    await api.deleteExpenseEvent(id);
+    await loadExpenseEvents();
+    if (plan) generate();
   }
 
   async function loadCached() {
@@ -307,6 +346,80 @@ export default function Plan() {
                 ))}
               </select>
               <button onClick={saveWindfall} disabled={!wfForm.label || !wfForm.amount || !wfForm.apply_month} className="btn-sm-teal text-xs disabled:opacity-40"><Plus size={12} /> Add windfall</button>
+            </div>
+          )}
+        </div>
+
+        {/* Expense Events */}
+        <div className="mt-5 border-t border-slate-700 pt-4">
+          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Expense Events</h4>
+          <p className="text-xs text-slate-500 mb-3">
+            Schedule one-off costs (holidays, birthdays, car repairs) to see their impact on your payoff timeline.
+          </p>
+          {expenseEvents.length > 0 && (
+            <div className="space-y-1 mb-3">
+              {expenseEvents.map(ev => (
+                <div key={ev.id} className="flex items-center gap-3 text-sm">
+                  {editingEv === ev.id ? (
+                    <>
+                      <input className="input flex-1 py-1 text-xs" placeholder="Label" value={evForm.label} onChange={e => setEvForm(f => ({ ...f, label: e.target.value }))} />
+                      <input className="input w-24 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={evForm.amount} onChange={e => setEvForm(f => ({ ...f, amount: e.target.value }))} />
+                      <select className="input py-1 text-xs" value={evForm.category} onChange={e => setEvForm(f => ({ ...f, category: e.target.value }))}>
+                        <option value="expected">Expected</option>
+                        <option value="unexpected">Unexpected</option>
+                      </select>
+                      <select className="input py-1 text-xs" value={evForm.apply_month} onChange={e => setEvForm(f => ({ ...f, apply_month: e.target.value }))}>
+                        <option value="">Select month</option>
+                        {(plan?.chartData || []).map(p => (
+                          <option key={p.month} value={p.month}>{formatMonthLabel(p.date)}</option>
+                        ))}
+                      </select>
+                      <button onClick={saveExpenseEvent} className="btn-sm-teal text-xs">Save</button>
+                      <button onClick={() => { setEditingEv(null); setEvForm({ label: '', amount: '', apply_month: '', category: 'expected' }); }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
+                    </>
+                  ) : (
+                    <>
+                      <span className={`font-medium ${ev.category === 'unexpected' ? 'text-red-400' : 'text-amber-400'}`}>
+                        -£{ev.amount.toLocaleString('en-GB')}
+                      </span>
+                      <span className="text-slate-300">{ev.label}</span>
+                      <span className={`text-xs px-1.5 py-0.5 rounded ${ev.category === 'unexpected' ? 'bg-red-900/40 text-red-300' : 'bg-amber-900/40 text-amber-300'}`}>
+                        {ev.category}
+                      </span>
+                      <span className="text-slate-500">
+                        {monthDateMap[ev.apply_month] ? formatMonthLabel(monthDateMap[ev.apply_month]) : `month ${ev.apply_month}`}
+                      </span>
+                      <div className="ml-auto flex gap-1">
+                        <button onClick={() => { setEditingEv(ev.id); setEvForm({ label: ev.label, amount: ev.amount, apply_month: ev.apply_month, category: ev.category }); }} className="p-1 text-slate-400 hover:text-slate-200"><Edit2 size={11} /></button>
+                        <button onClick={() => deleteExpenseEvent(ev.id)} className="p-1 text-slate-400 hover:text-red-400"><Trash2 size={11} /></button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+          {editingEv === null && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <input className="input flex-1 min-w-[120px] py-1 text-xs" placeholder="Label (e.g. Holiday to Spain)" value={evForm.label} onChange={e => setEvForm(f => ({ ...f, label: e.target.value }))} />
+              <input className="input w-28 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={evForm.amount} onChange={e => setEvForm(f => ({ ...f, amount: e.target.value }))} />
+              <select className="input py-1 text-xs" value={evForm.category} onChange={e => setEvForm(f => ({ ...f, category: e.target.value }))}>
+                <option value="expected">Expected</option>
+                <option value="unexpected">Unexpected</option>
+              </select>
+              <select className="input py-1 text-xs" value={evForm.apply_month} onChange={e => setEvForm(f => ({ ...f, apply_month: e.target.value }))}>
+                <option value="">Select month</option>
+                {(plan?.chartData || []).map(p => (
+                  <option key={p.month} value={p.month}>{formatMonthLabel(p.date)}</option>
+                ))}
+              </select>
+              <button
+                onClick={saveExpenseEvent}
+                disabled={!evForm.label || !evForm.amount || !evForm.apply_month}
+                className="btn-sm-teal text-xs disabled:opacity-40"
+              >
+                <Plus size={12} /> Add expense
+              </button>
             </div>
           )}
         </div>
