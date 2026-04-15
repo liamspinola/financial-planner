@@ -18,6 +18,7 @@ app.use('/api/budget',    require('./routes/budget'));
 app.use('/api/plan',      require('./routes/plan'));
 app.use('/api/ai',        require('./routes/ai'));
 app.use('/api/windfalls', require('./routes/windfalls'));
+app.use('/api/expense-events', require('./routes/expense-events'));
 app.use('/api/settings',  require('./routes/settings'));
 app.use('/api/progress',  require('./routes/progress'));
 app.use('/api/actuals',   require('./routes/actuals'));
