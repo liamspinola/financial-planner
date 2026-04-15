@@ -8,6 +8,13 @@ const { simulate } = require('../engine/amortisation');
 const { recommend } = require('../engine/strategy');
 const { buildGuide } = require('../engine/guide');
 
+// Helper: format a debt-free date string from months offset
+function formatDebtFreeDate(startDate, months) {
+  const d = new Date(startDate);
+  d.setMonth(d.getMonth() + months);
+  return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+}
+
 // POST /api/plan — calculate and return full payoff plan
 router.post('/', (req, res) => {
   const db = getDb();
@@ -62,15 +69,10 @@ router.post('/', (req, res) => {
     return point;
   });
 
-  // Compute debt-free date
-  const debtFreeDate = new Date(startDate);
-  debtFreeDate.setMonth(debtFreeDate.getMonth() + winning.payoffMonths);
-  const debtFreeDateStr = `${String(debtFreeDate.getMonth() + 1).padStart(2, '0')}/${debtFreeDate.getFullYear()}`;
-
+  // Compute debt-free dates using helper
+  const debtFreeDateStr = formatDebtFreeDate(startDate, winning.payoffMonths);
   const altResult = recommended === 'avalanche' ? snowball : avalanche;
-  const altDebtFreeDate = new Date(startDate);
-  altDebtFreeDate.setMonth(altDebtFreeDate.getMonth() + altResult.payoffMonths);
-  const altDateStr = `${String(altDebtFreeDate.getMonth() + 1).padStart(2, '0')}/${altDebtFreeDate.getFullYear()}`;
+  const altDateStr = formatDebtFreeDate(startDate, altResult.payoffMonths);
 
   const result = {
     summary,
@@ -84,20 +86,12 @@ router.post('/', (req, res) => {
       avalanche: {
         payoffMonths: avalanche.payoffMonths,
         totalInterest: avalanche.totalInterest,
-        debtFreeDate: (() => {
-          const d = new Date(startDate);
-          d.setMonth(d.getMonth() + avalanche.payoffMonths);
-          return `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-        })(),
+        debtFreeDate: formatDebtFreeDate(startDate, avalanche.payoffMonths),
       },
       snowball: {
         payoffMonths: snowball.payoffMonths,
         totalInterest: snowball.totalInterest,
-        debtFreeDate: (() => {
-          const d = new Date(startDate);
-          d.setMonth(d.getMonth() + snowball.payoffMonths);
-          return `${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
-        })(),
+        debtFreeDate: formatDebtFreeDate(startDate, snowball.payoffMonths),
       },
     },
     debtNames,
@@ -112,12 +106,7 @@ router.post('/', (req, res) => {
       current:       efCurrent,
       needed:        efNeeded,
       fundingMonths: fundingDelay,
-      fundCompleteDate: (() => {
-        if (fundingDelay === 0) return null;
-        const d = new Date(startDate);
-        d.setMonth(d.getMonth() + fundingDelay);
-        return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-      })(),
+      fundCompleteDate: fundingDelay > 0 ? formatDebtFreeDate(startDate, fundingDelay) : null,
     } : null,
   };
 
@@ -168,9 +157,6 @@ router.post('/whatif', (req, res) => {
   const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate);
   const scenario = simulate(debtMap, summary.availableForDebt + extraMonthly, 'avalanche', startDate);
 
-  const scenarioDate = new Date(startDate);
-  scenarioDate.setMonth(scenarioDate.getMonth() + scenario.payoffMonths);
-
   res.json({
     baseline: {
       payoffMonths:  baseline.payoffMonths,
@@ -179,7 +165,7 @@ router.post('/whatif', (req, res) => {
     scenario: {
       payoffMonths:  scenario.payoffMonths,
       totalInterest: scenario.totalInterest,
-      debtFreeDate:  `${String(scenarioDate.getMonth() + 1).padStart(2, '0')}/${scenarioDate.getFullYear()}`,
+      debtFreeDate:  formatDebtFreeDate(startDate, scenario.payoffMonths),
     },
     monthsSaved:   baseline.payoffMonths  - scenario.payoffMonths,
     interestSaved: baseline.totalInterest - scenario.totalInterest,
@@ -225,9 +211,7 @@ router.post('/lumpsum', (req, res) => {
 
   // Baseline simulation (no lump sum)
   const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay);
-  const baselineDate = new Date(startDate);
-  baselineDate.setMonth(baselineDate.getMonth() + baseline.payoffMonths);
-  const baselineDateStr = `${String(baselineDate.getMonth() + 1).padStart(2, '0')}/${baselineDate.getFullYear()}`;
+  const baselineDateStr = formatDebtFreeDate(startDate, baseline.payoffMonths);
 
   // Use projected debt balances at applyMonth-1 so targets reflect which debts are still active then.
   // monthlyStates[i].balances = {[debtId]: totalBalance} after processing month i+1.
@@ -258,13 +242,6 @@ router.post('/lumpsum', (req, res) => {
     if (bal > 0 && bal < smallestBalance) { smallestBalance = bal; snowballTargetId = id; }
   }
 
-  // Helper: format a debt-free date string from months offset
-  function debtFreeStr(months) {
-    const d = new Date(startDate);
-    d.setMonth(d.getMonth() + months);
-    return `${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
-  }
-
   const options = [];
 
   // Option 1: Avalanche — apply to highest-APR debt
@@ -282,7 +259,7 @@ router.post('/lumpsum', (req, res) => {
       totalInterest: avSim.totalInterest,
       monthsSaved: Math.max(0, baseline.payoffMonths - avSim.payoffMonths),
       interestSaved: Math.max(0, baseline.totalInterest - avSim.totalInterest),
-      debtFreeDate: debtFreeStr(avSim.payoffMonths),
+      debtFreeDate: formatDebtFreeDate(startDate, avSim.payoffMonths),
       recommended: false,
       reasoning: 'Attacking your highest-interest debt first reduces the total interest you pay.',
     });
@@ -303,7 +280,7 @@ router.post('/lumpsum', (req, res) => {
       totalInterest: sbSim.totalInterest,
       monthsSaved: Math.max(0, baseline.payoffMonths - sbSim.payoffMonths),
       interestSaved: Math.max(0, baseline.totalInterest - sbSim.totalInterest),
-      debtFreeDate: debtFreeStr(sbSim.payoffMonths),
+      debtFreeDate: formatDebtFreeDate(startDate, sbSim.payoffMonths),
       recommended: false,
       reasoning: 'Clearing a smaller debt first frees its minimum payment for immediate snowball rollover.',
     });
@@ -349,7 +326,7 @@ router.post('/lumpsum', (req, res) => {
         totalInterest: ccSim.totalInterest,
         monthsSaved: Math.max(0, baseline.payoffMonths - ccSim.payoffMonths),
         interestSaved: Math.max(0, baseline.totalInterest - ccSim.totalInterest),
-        debtFreeDate: debtFreeStr(ccSim.payoffMonths),
+        debtFreeDate: formatDebtFreeDate(startDate, ccSim.payoffMonths),
         recommended: false,
         reasoning: `Eliminating ${clearedNames.length === 1 ? 'a debt' : 'multiple debts'} completely frees up their minimum payments immediately.`,
         clearDetail: {
