@@ -12,6 +12,15 @@ const MIGRATIONS = [
   // Feature 2: percentage-based minimum payments
   'ALTER TABLE debts ADD COLUMN min_payment_pct   REAL',
   'ALTER TABLE debts ADD COLUMN min_payment_floor REAL',
+  // Expense events (money hits)
+  `CREATE TABLE IF NOT EXISTS expense_events (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    label       TEXT    NOT NULL,
+    amount      REAL    NOT NULL,
+    apply_month INTEGER NOT NULL,
+    category    TEXT    NOT NULL DEFAULT 'expected',
+    created_at  TEXT    DEFAULT (date('now'))
+  )`,
 ];
 
 let db;
