@@ -32,7 +32,7 @@ function buildGuide(monthlyStates, debtMap, summary) {
   }
 
   for (const state of monthlyStates) {
-    const { month, date, payments, debtsCleared, balances, windfall, isFundingPhase, fundingSaving } = state;
+    const { month, date, payments, debtsCleared, balances, windfall, expenseHit, isFundingPhase, fundingSaving } = state;
     const entry = {
       month,
       dateLabel: formatDate(date),
@@ -74,6 +74,15 @@ function buildGuide(monthlyStates, debtMap, summary) {
         type: 'windfall',
         amount: windfall,
         message: `Windfall of ${formatGbp(windfall)} applied to target debt this month`,
+      });
+    }
+
+    // Milestones: expense hit
+    if (expenseHit) {
+      entry.milestones.push({
+        type: 'expense_hit',
+        amount: expenseHit,
+        message: `Expense of ${formatGbp(expenseHit)} this month — extra debt payment reduced accordingly`,
       });
     }
 

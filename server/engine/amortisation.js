@@ -90,7 +90,7 @@ function applyPaymentToAccount(tranches, payment, simMonth) {
  * @param {number} [fundingDelay] - months to redirect extra payments to savings (emergency fund)
  * @returns {Object} { months, totalInterest, payoffMonths, monthlyStates }
  */
-function simulate(debtMap, available, strategy, startDate, windfalls = [], fundingDelay = 0) {
+function simulate(debtMap, available, strategy, startDate, windfalls = [], fundingDelay = 0, expenseEvents = []) {
   const groups = cloneGroups(debtMap);
   const monthlyStates = [];
   let totalInterest = 0;
@@ -117,11 +117,17 @@ function simulate(debtMap, available, strategy, startDate, windfalls = [], fundi
       .filter(w => w.apply_month === m + 1)
       .reduce((s, w) => s + w.amount, 0);
 
+    // Subtract any expense events scheduled for this month
+    const expenseHit = expenseEvents
+      .filter(e => e.apply_month === m + 1)
+      .reduce((s, e) => s + e.amount, 0);
+
     // During emergency fund phase, redirect extra payments to savings (no extra on debts)
     const inFundingPhase = m < fundingDelay;
 
-    // Extra payment this month = surplus above all effective minimums + any freed minimums + windfalls
-    const monthlyExtra = inFundingPhase ? 0 : (available + freedMinimums + windfall);
+    // Extra payment this month = surplus above all effective minimums + any freed minimums + windfalls - expense hits
+    // Clamped to 0: a bad expense month means we only pay minimums, never negative
+    const monthlyExtra = inFundingPhase ? 0 : Math.max(0, available + freedMinimums + windfall - expenseHit);
 
     // Snapshot pre-payment balances BEFORE any interest accrual or payment application.
     // Used below to detect which debts clear THIS month — we can't rely on post-payment
@@ -163,6 +169,7 @@ function simulate(debtMap, available, strategy, startDate, windfalls = [], fundi
       totalInterestThisMonth: 0,
       debtsCleared: [],
       windfall: windfall > 0 ? windfall : null,
+      expenseHit: expenseHit > 0 ? expenseHit : null,
       isFundingPhase: inFundingPhase,
       fundingSaving: inFundingPhase ? available : 0,
     };
