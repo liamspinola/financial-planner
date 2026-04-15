@@ -167,16 +167,20 @@ export default function Plan() {
       }
       setEvForm({ label: '', amount: '', apply_month: '', category: 'expected' });
       await loadExpenseEvents();
-      if (plan) generate();
+      if (plan) await generate();
     } catch (err) {
       console.error('Failed to save expense event', err);
     }
   }
 
   async function deleteExpenseEvent(id) {
-    await api.deleteExpenseEvent(id);
-    await loadExpenseEvents();
-    if (plan) generate();
+    try {
+      await api.deleteExpenseEvent(id);
+      await loadExpenseEvents();
+      if (plan) await generate();
+    } catch (err) {
+      console.error('Failed to delete expense event', err);
+    }
   }
 
   async function loadCached() {
