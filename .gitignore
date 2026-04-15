@@ -6,3 +6,4 @@ finance.db
 *.db-shm
 *.db-wal
 .env
+.worktrees/
