@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { flushSync } from 'react-dom';
-import { Printer, RefreshCw, TrendingDown, Info, Plus, Edit2, Trash2 } from 'lucide-react';
+import { Printer, RefreshCw, TrendingDown, Info, Plus, Edit2, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ReferenceLine,
@@ -12,6 +12,25 @@ import Spinner from '../components/Spinner';
 import ChartTooltip from '../components/ChartTooltip';
 import LumpSumAdvisor from '../components/LumpSumAdvisor';
 import { DEBT_COLORS } from '../lib/constants';
+
+function useLocalStorage(key, defaultValue) {
+  const [value, setValue] = useState(() => {
+    try {
+      const stored = localStorage.getItem(key);
+      return stored !== null ? JSON.parse(stored) : defaultValue;
+    } catch {
+      return defaultValue;
+    }
+  });
+  function set(updater) {
+    setValue(prev => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      localStorage.setItem(key, JSON.stringify(next));
+      return next;
+    });
+  }
+  return [value, set];
+}
 
 // Convert **text** to <strong> spans inline, returning mixed text/element array
 function renderInline(text) {
@@ -91,11 +110,20 @@ export default function Plan() {
   const [windfalls, setWindfalls] = useState([]);
   const [wfForm, setWfForm] = useState({ label: '', amount: '', apply_month: '' });
   const [editingWf, setEditingWf] = useState(null); // id being edited
+  const [wfOpen, setWfOpen] = useLocalStorage('plan_wf_open', true);
 
   // Expense events state
   const [expenseEvents, setExpenseEvents] = useState([]);
   const [evForm, setEvForm] = useState({ label: '', amount: '', apply_month: '', category: 'expected' });
   const [editingEv, setEditingEv] = useState(null); // id being edited
+  const [evOpen, setEvOpen] = useLocalStorage('plan_ev_open', true);
+
+  // Collapsible section state
+  const [whatIfOpen, setWhatIfOpen] = useLocalStorage('plan_whatif_open', true);
+  const [chartOpen, setChartOpen] = useLocalStorage('plan_chart_open', true);
+  const [aiOpen, setAiOpen] = useLocalStorage('plan_ai_open', true);
+  const [budgetTipsOpen, setBudgetTipsOpen] = useLocalStorage('plan_budget_open', true);
+  const [guideOpen, setGuideOpen] = useLocalStorage('plan_guide_open', true);
 
   useEffect(() => { loadCached(); loadWindfalls(); loadExpenseEvents(); }, []);
 
@@ -296,8 +324,21 @@ export default function Plan() {
 
         {/* Windfall payments */}
         <div className="mt-5 border-t border-slate-700 pt-4">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Windfall / Lump Sum Payments</h4>
-          {windfalls.length > 0 && (
+          <button
+            onClick={() => setWfOpen(o => !o)}
+            className="flex items-center gap-2 w-full text-left mb-3 group"
+          >
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 group-hover:text-slate-300 transition-colors">
+              Windfall / Lump Sum Payments
+            </h4>
+            {windfalls.length > 0 && (
+              <span className="text-xs text-slate-500">({windfalls.length})</span>
+            )}
+            <span className="ml-auto text-slate-500 group-hover:text-slate-400 transition-colors">
+              {wfOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </span>
+          </button>
+          {wfOpen && windfalls.length > 0 && (
             <div className="space-y-1 mb-3">
               {windfalls.map(w => (
                 <div key={w.id} className="flex items-center gap-3 text-sm">
@@ -335,7 +376,7 @@ export default function Plan() {
               ))}
             </div>
           )}
-          {editingWf === null && (
+          {wfOpen && editingWf === null && (
             <div className="flex items-center gap-2 flex-wrap">
               <input className="input flex-1 min-w-[120px] py-1 text-xs" placeholder="Label (e.g. Tax rebate)" value={wfForm.label} onChange={e => setWfForm(f => ({ ...f, label: e.target.value }))} />
               <input className="input w-28 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={wfForm.amount} onChange={e => setWfForm(f => ({ ...f, amount: e.target.value }))} />
@@ -356,11 +397,26 @@ export default function Plan() {
 
         {/* Expense Events */}
         <div className="mt-5 border-t border-slate-700 pt-4">
-          <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3">Expense Events</h4>
-          <p className="text-xs text-slate-500 mb-3">
-            Schedule one-off costs (holidays, birthdays, car repairs) to see their impact on your payoff timeline.
-          </p>
-          {expenseEvents.length > 0 && (
+          <button
+            onClick={() => setEvOpen(o => !o)}
+            className="flex items-center gap-2 w-full text-left mb-3 group"
+          >
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-slate-400 group-hover:text-slate-300 transition-colors">
+              Expense Events
+            </h4>
+            {expenseEvents.length > 0 && (
+              <span className="text-xs text-slate-500">({expenseEvents.length})</span>
+            )}
+            <span className="ml-auto text-slate-500 group-hover:text-slate-400 transition-colors">
+              {evOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </span>
+          </button>
+          {evOpen && (
+            <p className="text-xs text-slate-500 mb-3">
+              Schedule one-off costs (holidays, birthdays, car repairs) to see their impact on your payoff timeline.
+            </p>
+          )}
+          {evOpen && expenseEvents.length > 0 && (
             <div className="space-y-1 mb-3">
               {expenseEvents.map(ev => (
                 <div key={ev.id} className="flex items-center gap-3 text-sm">
@@ -403,7 +459,7 @@ export default function Plan() {
               ))}
             </div>
           )}
-          {editingEv === null && (
+          {evOpen && editingEv === null && (
             <div className="flex items-center gap-2 flex-wrap">
               <input className="input flex-1 min-w-[120px] py-1 text-xs" placeholder="Label (e.g. Holiday to Spain)" value={evForm.label} onChange={e => setEvForm(f => ({ ...f, label: e.target.value }))} />
               <input className="input w-28 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={evForm.amount} onChange={e => setEvForm(f => ({ ...f, amount: e.target.value }))} />
@@ -440,39 +496,6 @@ export default function Plan() {
 
       {plan && (
         <>
-          {/* Strategy recommendation */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-            <div className="lg:col-span-2 card p-5">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-1">Recommended Strategy</p>
-              <h3 className="text-xl font-semibold text-teal-400 mb-2 capitalize">{plan.recommendation?.strategy} Method</h3>
-              <p className="text-sm text-slate-300 leading-relaxed">{plan.recommendation?.reason}</p>
-            </div>
-            <div className="card p-5 overflow-hidden">
-              <p className="text-xs uppercase tracking-wider text-slate-400 mb-3">Strategy Comparison</p>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-slate-500">
-                    <th className="text-left pb-2"></th>
-                    <th className="text-right pb-2">Avalanche</th>
-                    <th className="text-right pb-2">Snowball</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-700/50">
-                  <tr>
-                    <td className="py-1.5 text-slate-400">Debt-free</td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-200">{plan.comparison?.avalanche?.debtFreeDate}</td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-200">{plan.comparison?.snowball?.debtFreeDate}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1.5 text-slate-400">Total interest</td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-200">{gbp(plan.comparison?.avalanche?.totalInterest)}</td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-200">{gbp(plan.comparison?.snowball?.totalInterest)}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
           {/* Summary stats */}
           <div className={`grid gap-4 mb-6 ${plan.emergencyFund ? 'grid-cols-4' : 'grid-cols-3'}`}>
             <div className="card p-4 text-center">
@@ -502,100 +525,122 @@ export default function Plan() {
 
           {/* What-If panel */}
           <div className="card p-5 mb-6 no-print">
-            <h3 className="text-sm font-semibold text-slate-300 mb-3">What If I Paid More?</h3>
-            <div className="flex flex-wrap items-center gap-4">
-              <div className="flex-1 min-w-[200px]">
-                <input
-                  type="range"
-                  min={10} max={500} step={10}
-                  value={whatIfExtra}
-                  onChange={e => {
-                    const v = Number(e.target.value);
-                    setWhatIfExtra(v);
-                    setWhatIfResult(null);
-                  }}
-                  className="w-full accent-teal-500"
-                />
-                <div className="flex justify-between text-xs text-slate-500 mt-0.5">
-                  <span>£10</span><span>£500</span>
+            <button
+              onClick={() => setWhatIfOpen(o => !o)}
+              className="flex items-center gap-2 w-full text-left group"
+            >
+              <h3 className="text-sm font-semibold text-slate-300 group-hover:text-slate-100 transition-colors">What If I Paid More?</h3>
+              <span className="ml-auto text-slate-500 group-hover:text-slate-400 transition-colors">
+                {whatIfOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              </span>
+            </button>
+            {whatIfOpen && (
+              <>
+                <div className="flex flex-wrap items-center gap-4 mt-3">
+                  <div className="flex-1 min-w-[200px]">
+                    <input
+                      type="range"
+                      min={10} max={500} step={10}
+                      value={whatIfExtra}
+                      onChange={e => {
+                        const v = Number(e.target.value);
+                        setWhatIfExtra(v);
+                        setWhatIfResult(null);
+                      }}
+                      className="w-full accent-teal-500"
+                    />
+                    <div className="flex justify-between text-xs text-slate-500 mt-0.5">
+                      <span>£10</span><span>£500</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-slate-400">Extra</span>
+                    <input
+                      type="number"
+                      min={0} max={9999} step={10}
+                      value={whatIfExtra}
+                      onChange={e => {
+                        const v = Math.max(0, Number(e.target.value));
+                        setWhatIfExtra(v);
+                        setWhatIfResult(null);
+                      }}
+                      className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-100 text-right"
+                    />
+                    <span className="text-sm text-slate-400">/month</span>
+                    <button
+                      onClick={() => runWhatIf(whatIfExtra)}
+                      disabled={whatIfLoading || whatIfExtra === 0}
+                      className="btn-teal text-xs disabled:opacity-50"
+                    >
+                      {whatIfLoading ? <Spinner size={13} /> : 'Calculate'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-slate-400">Extra</span>
-                <input
-                  type="number"
-                  min={0} max={9999} step={10}
-                  value={whatIfExtra}
-                  onChange={e => {
-                    const v = Math.max(0, Number(e.target.value));
-                    setWhatIfExtra(v);
-                    setWhatIfResult(null);
-                  }}
-                  className="w-20 bg-slate-700 border border-slate-600 rounded px-2 py-1 text-sm text-slate-100 text-right"
-                />
-                <span className="text-sm text-slate-400">/month</span>
-                <button
-                  onClick={() => runWhatIf(whatIfExtra)}
-                  disabled={whatIfLoading || whatIfExtra === 0}
-                  className="btn-teal text-xs disabled:opacity-50"
-                >
-                  {whatIfLoading ? <Spinner size={13} /> : 'Calculate'}
-                </button>
-              </div>
-            </div>
-            {whatIfResult && (
-              <div className="mt-3 flex flex-wrap gap-4 text-sm">
-                {whatIfResult.monthsSaved > 0 ? (
-                  <>
-                    <span className="text-green-400 font-medium">
-                      {monthsLabel(whatIfResult.monthsSaved)} sooner
-                    </span>
-                    <span className="text-green-400 font-medium">
-                      {gbp(whatIfResult.interestSaved)} less interest
-                    </span>
-                    <span className="text-slate-400">
-                      → Debt-free {whatIfResult.scenario.debtFreeDate}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-slate-400">No change — already at the maximum payoff speed.</span>
+                {whatIfResult && (
+                  <div className="mt-3 flex flex-wrap gap-4 text-sm">
+                    {whatIfResult.monthsSaved > 0 ? (
+                      <>
+                        <span className="text-green-400 font-medium">
+                          {monthsLabel(whatIfResult.monthsSaved)} sooner
+                        </span>
+                        <span className="text-green-400 font-medium">
+                          {gbp(whatIfResult.interestSaved)} less interest
+                        </span>
+                        <span className="text-slate-400">
+                          → Debt-free {whatIfResult.scenario.debtFreeDate}
+                        </span>
+                      </>
+                    ) : (
+                      <span className="text-slate-400">No change — already at the maximum payoff speed.</span>
+                    )}
+                  </div>
                 )}
-              </div>
+              </>
             )}
           </div>
 
           {/* Timeline chart */}
           {plan.chartData?.length > 0 && (
             <div className="card p-6 mb-6">
-              <h3 className="text-sm font-semibold text-slate-300 mb-4">Balance Over Time</h3>
-              <div ref={chartContainerRef} className="print-chart-container" style={{ width: '100%' }}>
-                <LineChart width={chartWidth} height={300} data={plan.chartData} margin={{ top: 4, right: 16, bottom: 0, left: 16 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis
-                    dataKey="date"
-                    tickFormatter={formatMonthLabel}
-                    interval="preserveStartEnd"
-                    tick={{ fill: '#94a3b8', fontSize: 11 }}
-                  />
-                  <YAxis tickFormatter={v => `£${(v/1000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                  <Tooltip content={<ChartTooltip />} />
-                  <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
-                  {paidOffDates.map((d, i) => (
-                    <ReferenceLine key={i} x={d} stroke="#22c55e" strokeDasharray="4 4" strokeWidth={1} />
-                  ))}
-                  {plan.debtIds.map((id, i) => (
-                    <Line
-                      key={id}
-                      type="monotone"
-                      dataKey={`debt_${id}`}
-                      name={plan.debtNames[id]}
-                      stroke={DEBT_COLORS[i % DEBT_COLORS.length]}
-                      dot={false}
-                      strokeWidth={2}
+              <button
+                onClick={() => setChartOpen(o => !o)}
+                className="flex items-center gap-2 w-full text-left group"
+              >
+                <h3 className="text-sm font-semibold text-slate-300 group-hover:text-slate-100 transition-colors">Balance Over Time</h3>
+                <span className="ml-auto text-slate-500 group-hover:text-slate-400 transition-colors">
+                  {chartOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                </span>
+              </button>
+              {chartOpen && (
+                <div ref={chartContainerRef} className="print-chart-container mt-4" style={{ width: '100%' }}>
+                  <LineChart width={chartWidth} height={300} data={plan.chartData} margin={{ top: 4, right: 16, bottom: 0, left: 16 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                    <XAxis
+                      dataKey="date"
+                      tickFormatter={formatMonthLabel}
+                      interval="preserveStartEnd"
+                      tick={{ fill: '#94a3b8', fontSize: 11 }}
                     />
-                  ))}
-                </LineChart>
-              </div>
+                    <YAxis tickFormatter={v => `£${(v/1000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
+                    {paidOffDates.map((d, i) => (
+                      <ReferenceLine key={i} x={d} stroke="#22c55e" strokeDasharray="4 4" strokeWidth={1} />
+                    ))}
+                    {plan.debtIds.map((id, i) => (
+                      <Line
+                        key={id}
+                        type="monotone"
+                        dataKey={`debt_${id}`}
+                        name={plan.debtNames[id]}
+                        stroke={DEBT_COLORS[i % DEBT_COLORS.length]}
+                        dot={false}
+                        strokeWidth={2}
+                      />
+                    ))}
+                  </LineChart>
+                </div>
+              )}
             </div>
           )}
 
@@ -615,21 +660,41 @@ export default function Plan() {
                 <>
                   {aiData.narrative && (
                     <div className="card p-6 bg-slate-800/80">
-                      <div className="flex items-center gap-2 mb-4">
-                        <p className="text-xs uppercase tracking-wider text-teal-400 font-semibold">Financial Analysis</p>
-                        {aiData.cached && <span className="text-xs text-slate-500">(cached)</span>}
-                      </div>
-                      <div className="prose prose-sm prose-invert max-w-[65ch] leading-relaxed text-slate-300 space-y-3">
-                        {renderNarrative(aiData.narrative)}
-                      </div>
+                      <button
+                        onClick={() => setAiOpen(o => !o)}
+                        className="flex items-center gap-2 w-full text-left group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs uppercase tracking-wider text-teal-400 font-semibold group-hover:text-teal-300 transition-colors">Financial Analysis</p>
+                          {aiData.cached && <span className="text-xs text-slate-500">(cached)</span>}
+                        </div>
+                        <span className="ml-auto text-slate-500 group-hover:text-slate-400 transition-colors">
+                          {aiOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </span>
+                      </button>
+                      {aiOpen && (
+                        <div className="prose prose-sm prose-invert max-w-[65ch] leading-relaxed text-slate-300 space-y-3 mt-4">
+                          {renderNarrative(aiData.narrative)}
+                        </div>
+                      )}
                     </div>
                   )}
                   {aiData.budgetTips && (
                     <div className="card p-6">
-                      <p className="text-xs uppercase tracking-wider text-amber-400 font-semibold mb-4">Budget Recommendations</p>
-                      <div className="space-y-2">
-                        {renderBudgetTips(aiData.budgetTips)}
-                      </div>
+                      <button
+                        onClick={() => setBudgetTipsOpen(o => !o)}
+                        className="flex items-center gap-2 w-full text-left group"
+                      >
+                        <p className="text-xs uppercase tracking-wider text-amber-400 font-semibold group-hover:text-amber-300 transition-colors">Budget Recommendations</p>
+                        <span className="ml-auto text-slate-500 group-hover:text-slate-400 transition-colors">
+                          {budgetTipsOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                        </span>
+                      </button>
+                      {budgetTipsOpen && (
+                        <div className="space-y-2 mt-4">
+                          {renderBudgetTips(aiData.budgetTips)}
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -639,12 +704,22 @@ export default function Plan() {
 
           {/* Step-by-step guide */}
           <div className="card p-6 mb-6">
-            <h3 className="text-sm font-semibold text-slate-300 mb-4">Monthly Action Guide</h3>
-            <div className="space-y-1 max-h-[600px] overflow-y-auto scrollbar-thin pr-2 print:max-h-none print:overflow-visible">
-              {plan.guide?.map((entry, i) => (
-                <GuideEntry key={i} entry={entry} />
-              ))}
-            </div>
+            <button
+              onClick={() => setGuideOpen(o => !o)}
+              className="flex items-center gap-2 w-full text-left group"
+            >
+              <h3 className="text-sm font-semibold text-slate-300 group-hover:text-slate-100 transition-colors">Monthly Action Guide</h3>
+              <span className="ml-auto text-slate-500 group-hover:text-slate-400 transition-colors">
+                {guideOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+              </span>
+            </button>
+            {guideOpen && (
+              <div className="space-y-1 max-h-[600px] overflow-y-auto scrollbar-thin pr-2 print:max-h-none print:overflow-visible mt-4">
+                {plan.guide?.map((entry, i) => (
+                  <GuideEntry key={i} entry={entry} />
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Disclaimer */}
