@@ -271,6 +271,13 @@ export default function Plan() {
     [plan?.chartData]
   );
 
+  const strategySavings = useMemo(() => {
+    const a = plan?.comparison?.avalanche?.totalInterest;
+    const s = plan?.comparison?.snowball?.totalInterest;
+    if (a == null || s == null) return null;
+    return Math.round(Math.abs(a - s));
+  }, [plan?.comparison]);
+
   return (
     <div className="p-8">
       <PageHeader
@@ -498,7 +505,7 @@ export default function Plan() {
       {plan && (
         <>
           {/* Summary stats */}
-          <div className={`grid gap-4 mb-6 ${plan.emergencyFund ? 'grid-cols-4' : 'grid-cols-3'}`}>
+          <div className={`grid gap-4 mb-6 ${plan.emergencyFund ? 'grid-cols-5' : 'grid-cols-4'}`}>
             <div className="card p-4 text-center">
               <p className="text-xs text-slate-400 mb-1">Debt-Free Date</p>
               <p className="text-lg font-semibold text-teal-400">{plan.debtFreeDate}</p>
@@ -522,6 +529,27 @@ export default function Plan() {
                 </p>
               </div>
             )}
+            <div className="card p-4 text-center">
+              <p className="text-xs text-slate-400 mb-1">Strategy</p>
+              <p className="text-lg font-semibold text-teal-400 capitalize">{plan.recommendation?.strategy}</p>
+              <p className="text-xs mt-1">
+                {strategySavings != null && strategySavings > 0 && (
+                  <span className="text-slate-400">saves {gbp(strategySavings)} </span>
+                )}
+                {strategySavings != null && strategySavings === 0 && (
+                  <span className="text-slate-400">same cost </span>
+                )}
+                {strategySavings != null && strategySavings > 0 && (
+                  <span className="text-slate-600">· </span>
+                )}
+                <button
+                  onClick={() => setStrategyOpen(o => !o)}
+                  className="text-slate-500 hover:text-slate-300 underline cursor-pointer"
+                >
+                  see comparison {strategyOpen ? '↑' : '↓'}
+                </button>
+              </p>
+            </div>
           </div>
 
           {/* What-If panel */}
