@@ -137,7 +137,7 @@ export default function Plan() {
     });
     ro.observe(el);
     return () => ro.disconnect();
-  }, [plan]); // re-run when plan loads so the chart div is in the DOM
+  }, [plan, chartOpen]); // re-run when plan loads or chart is toggled open
 
   // Force an exact 680px render before the browser captures the print layout,
   // preventing ResponsiveContainer's stale measurement from clipping the chart.
