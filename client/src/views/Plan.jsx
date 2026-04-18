@@ -533,14 +533,14 @@ export default function Plan() {
               <p className="text-xs text-slate-400 mb-1">Strategy</p>
               <p className="text-lg font-semibold text-teal-400 capitalize">{plan.recommendation?.strategy}</p>
               <p className="text-xs mt-1">
-                {strategySavings != null && strategySavings > 0 && (
-                  <span className="text-slate-400">saves {gbp(strategySavings)} </span>
-                )}
-                {strategySavings != null && strategySavings === 0 && (
-                  <span className="text-slate-400">same cost </span>
-                )}
-                {strategySavings != null && strategySavings > 0 && (
-                  <span className="text-slate-600">· </span>
+                {strategySavings != null && (
+                  <>
+                    {strategySavings > 0
+                      ? <span className="text-slate-400">saves {gbp(strategySavings)} </span>
+                      : <span className="text-slate-400">same cost </span>
+                    }
+                    {strategySavings > 0 && <span className="text-slate-600">· </span>}
+                  </>
                 )}
                 <button
                   onClick={() => setStrategyOpen(o => !o)}
