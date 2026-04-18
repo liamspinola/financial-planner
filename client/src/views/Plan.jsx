@@ -119,6 +119,7 @@ export default function Plan() {
   const [evOpen, setEvOpen] = useLocalStorage('plan_ev_open', true);
 
   // Collapsible section state
+  const [strategyOpen, setStrategyOpen] = useLocalStorage('plan_strategy_open', false);
   const [whatIfOpen, setWhatIfOpen] = useLocalStorage('plan_whatif_open', true);
   const [chartOpen, setChartOpen] = useLocalStorage('plan_chart_open', true);
   const [aiOpen, setAiOpen] = useLocalStorage('plan_ai_open', true);
