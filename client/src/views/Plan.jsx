@@ -531,15 +531,14 @@ export default function Plan() {
             )}
             <div className="card p-4 text-center">
               <p className="text-xs text-slate-400 mb-1">Strategy</p>
-              <p className="text-lg font-semibold text-teal-400 capitalize">{plan.recommendation?.strategy}</p>
+              <p className="text-lg font-semibold text-teal-400 capitalize">{plan.recommendation?.strategy ?? '—'}</p>
               <p className="text-xs mt-1">
                 {strategySavings != null && (
                   <>
-                    {strategySavings > 0
-                      ? <span className="text-slate-400">saves {gbp(strategySavings)} </span>
-                      : <span className="text-slate-400">same cost </span>
+                    {strategySavings >= 1
+                      ? <span className="text-slate-400">saves {gbp(strategySavings)} · </span>
+                      : <span className="text-slate-400">same cost · </span>
                     }
-                    {strategySavings > 0 && <span className="text-slate-600">· </span>}
                   </>
                 )}
                 <button
@@ -565,8 +564,8 @@ export default function Plan() {
                 <tbody className="divide-y divide-slate-700/50">
                   <tr>
                     <td className="py-1.5 text-slate-400">Debt-free</td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-200">{plan.comparison?.avalanche?.debtFreeDate}</td>
-                    <td className="py-1.5 text-right tabular-nums text-slate-200">{plan.comparison?.snowball?.debtFreeDate}</td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-200">{plan.comparison?.avalanche?.debtFreeDate ?? '—'}</td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-200">{plan.comparison?.snowball?.debtFreeDate ?? '—'}</td>
                   </tr>
                   <tr>
                     <td className="py-1.5 text-slate-400">Total interest</td>
