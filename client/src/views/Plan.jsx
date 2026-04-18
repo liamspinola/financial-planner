@@ -552,6 +552,32 @@ export default function Plan() {
             </div>
           </div>
 
+          {strategyOpen && (
+            <div className="card p-4 mb-6">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-xs text-slate-500">
+                    <th className="text-left pb-2"></th>
+                    <th className="text-right pb-2">Avalanche</th>
+                    <th className="text-right pb-2">Snowball</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-700/50">
+                  <tr>
+                    <td className="py-1.5 text-slate-400">Debt-free</td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-200">{plan.comparison?.avalanche?.debtFreeDate}</td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-200">{plan.comparison?.snowball?.debtFreeDate}</td>
+                  </tr>
+                  <tr>
+                    <td className="py-1.5 text-slate-400">Total interest</td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-200">{gbp(plan.comparison?.avalanche?.totalInterest)}</td>
+                    <td className="py-1.5 text-right tabular-nums text-slate-200">{gbp(plan.comparison?.snowball?.totalInterest)}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          )}
+
           {/* What-If panel */}
           <div className="card p-5 mb-6 no-print">
             <button
