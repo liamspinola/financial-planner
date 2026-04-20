@@ -20,6 +20,7 @@ The app must feel native without requiring an app store. It must handle personal
 
 | Decision | Choice | Reason |
 |---|---|---|
+| App name | Liam's Wicked Financial Planner | Used in PWA manifest, browser tab, login page, and privacy policy |
 | Platform | Hosted PWA | Reuses 90% of existing code, works iOS + Android, no app store |
 | Database | Neon PostgreSQL (EU region) | Replaces SQLite, no free-tier pausing, database branching for CI |
 | Auth | Supabase Auth | Google + email magic link, EU region, free up to 50k MAU |
@@ -34,6 +35,10 @@ The app must feel native without requiring an app store. It must handle personal
 ---
 
 ## Architecture
+
+**Vercel/Express adapter:** Express does not run natively as Vercel serverless functions. The Express app is exported as a single Vercel serverless function via `api/index.ts` using `@vercel/node`. All routes under `/api/v1/` are handled by this catch-all function. The `vercel.json` rewrites all `/api/*` requests to `api/index.ts`.
+
+**Shared types path alias:** Both `client/tsconfig.json` and `server/tsconfig.json` define a path alias `@shared/*` pointing to `../../shared/*`. Vite's `resolve.alias` in `vite.config.ts` also maps `@shared` to the same directory. All imports use `@shared/types/debt` etc. — never relative `../../shared/` paths.
 
 ```
 financial-planner/
@@ -71,7 +76,7 @@ financial-planner/
       router.ts       ← checks user BYOK key → selects provider
       prompts/
         analysis.ts   ← buildAnalysisPrompt(ctx: FinancialContext): string
-        golden-outputs/ ← saved Claude CLI outputs for prompt regression
+        golden-outputs/ ← saved Claude CLI outputs for prompt regression (committed to repo, not gitignored)
     routes/           ← all prefixed /api/v1/
       users.ts        ← DELETE /api/v1/users/me, GET /api/v1/users/me
       ai-keys.ts      ← BYOK CRUD (encrypted)
@@ -129,12 +134,22 @@ res.end();
 
 ## Data Model
 
-All existing tables (debts, tranches, income_sources, expenses, spending_actuals, progress_snapshots, plan_cache, windfalls, expense_events, settings, messages, conversations) gain a `user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE` column. Every query includes a `WHERE user_id = $userId` clause.
+**Important — no cross-database FK:** Neon (application database) and Supabase (auth) are separate database services. Neon cannot hold a foreign key constraint referencing Supabase's `auth.users` table. Neon is used instead of Supabase PostgreSQL specifically because Supabase's free PostgreSQL tier pauses after 7 days of inactivity — unacceptable for a non-technical user who may not open the app for a week.
+
+User isolation is enforced at the **application layer**, not DB referential integrity:
+- Supabase issues a JWT containing the user's UUID on login
+- The auth middleware extracts and verifies this UUID → `req.auth.userId`
+- Every Drizzle query includes `.where(eq(table.userId, req.auth.userId))`
+- Cross-user access tests verify this at the integration level
+
+All existing tables (debts, tranches, income_sources, expenses, spending_actuals, progress_snapshots, plan_cache, windfalls, expense_events, settings, messages, conversations) gain a `user_id UUID NOT NULL` column with a Drizzle-level index. Every query includes a `WHERE user_id = $userId` clause.
 
 New tables:
 - `user_ai_keys`: `user_id`, `encrypted_key` (AES-256-GCM ciphertext), `iv` (12-byte random), `provider` ('anthropic'), `created_at`
 
 Separate `user_profiles` table (display name, preferences) kept isolated from financial tables — if financial tables are ever exposed, they contain amounts and categories, not names tied to those amounts.
+
+**Migration rollback strategy:** Before running any production migration: (a) take a Neon point-in-time restore snapshot, (b) test the down migration on a Neon branch first, (c) never run a destructive migration (DROP COLUMN/TABLE) without a named restore point. Migration harness runs as `npm run test:migration` — seeds SQLite, runs migration on a Neon branch, verifies row counts and amortisation totals match. Must pass before Phase 1 is marked complete.
 
 ---
 
@@ -248,6 +263,8 @@ Requires `viewport-fit=cover` in the viewport meta tag and `"display": "standalo
 - **Safety:** Gemini configured with `BLOCK_ONLY_HIGH` for all harm categories (financial content triggers false positives at MEDIUM)
 - **System prompts:** Server-side only, never in client bundles
 - **Model pinning:** Pinned to specific version — never use "latest" aliases
+- **Gemini API endpoint:** Use the standard Google AI Studio API (not Vertex AI regional endpoints). The standard API does not require a Google Cloud project or service account. Google's API data processing terms provide GDPR-adequate commitments — user financial data is not used to train models. Document this in the privacy policy.
+- **FinancialContext shape:** The interface shown in the Architecture section defines the PII-exclusion contract. The full implementation will include additional fields (tranches with promotional rates, windfalls, expense events, strategy comparison results, debt-free date) — all financial figures, none personally identifying. The constraint is: no `userId`, `email`, or `displayName` may appear in `FinancialContext` by type definition.
 - **Prompt quality gate:** Golden scenario outputs captured from current Claude CLI before migration; Gemini output must match quality before Phase 4 completes
 
 ---
@@ -275,7 +292,9 @@ npm test                  # Jest
 npx playwright test       # E2E (desktop + iPhone 14 + Pixel 7)
 ```
 
-**Migration testing harness:** Seed SQLite → run migration → verify row counts match → verify amortisation totals identical (catches float precision issues)
+**Migration testing harness:** Runs as `npm run test:migration`. Seeds SQLite with realistic data → runs migration on a Neon branch → verifies row counts match → verifies amortisation totals identical. Not part of regular CI (runs once per migration, on a real Neon branch). Must pass before Phase 1 is marked complete.
+
+**E2E test data seeding:** Each test creates its own user and data via API calls in `beforeEach` — no shared state between tests. This makes tests order-independent and fully parallelisable. Auth bypass: Supabase test helpers mint JWTs directly, bypassing the Google OAuth UI flow.
 
 ---
 
@@ -289,7 +308,7 @@ Before sharing the URL with the first user:
 - [ ] Lighthouse mobile: 90+ Performance, 100 PWA
 - [ ] Manual test on physical Android phone: install to home screen, navigate all tabs, add debt, run plan, use AI
 - [ ] Manual test on physical iPhone: bottom nav not clipped by home indicator, Dynamic Island area clear
-- [ ] Privacy policy live and linked in app footer
+- [ ] Privacy policy live at `/privacy` (static route within the app) and linked in app footer
 - [ ] FCA disclaimer visible on AI responses
 - [ ] Account deletion tested end-to-end (all tables cleared)
 - [ ] UptimeRobot monitoring active and green
