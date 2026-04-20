@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node index.js",
     "test": "jest",
-    "test:unit": "jest"
+    "test:unit": "jest",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx --watch index.ts",
+    "build": "tsc"
   },
   "keywords": [],
   "author": "",

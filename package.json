@@ -6,10 +6,15 @@
     "start": "concurrently \"npm run server\" \"npm run client\" --names \"api,ui\" --prefix-colors \"cyan,magenta\"",
     "server": "npm start --prefix server",
     "client": "npm run dev --prefix client",
-    "install:all": "npm install && npm install --prefix client && npm install --prefix server"
+    "install:all": "npm install && npm install --prefix client && npm install --prefix server",
+    "typecheck": "tsc --noEmit --project client/tsconfig.json && tsc --noEmit --project server/tsconfig.json",
+    "audit:ci": "npm audit --audit-level=high && npm audit --audit-level=high --prefix client && npm audit --audit-level=high --prefix server"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
     "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "zod": "^4.3.6"
   }
 }
