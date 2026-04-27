@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { CheckCircle, Zap } from 'lucide-react';
+import { CheckCircle, Zap, ChevronDown, ChevronUp } from 'lucide-react';
 import { api } from '../lib/api';
 import { gbp, monthsLabel, aprPct, formatMonthLabel } from '../lib/format';
 import Spinner from './Spinner';
@@ -50,7 +50,7 @@ function OptionCard({ option, amount, applyMonth, onWindfallSaved }) {
         </p>
       )}
 
-      {/* Clear & Continue breakdown */}
+      {/* Cascade breakdown (shown when lump sum clears one or more debts) */}
       {option.clearDetail && (
         <div className="text-xs text-slate-400 space-y-0.5">
           {option.clearDetail.cleared.map(c => (
@@ -114,6 +114,7 @@ function OptionCard({ option, amount, applyMonth, onWindfallSaved }) {
 }
 
 export default function LumpSumAdvisor({ onWindfallSaved, planMonths, planChartData }) {
+  const [open, setOpen] = useState(true);
   const [amount, setAmount] = useState('');
   const [applyMonth, setApplyMonth] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -149,84 +150,100 @@ export default function LumpSumAdvisor({ onWindfallSaved, planMonths, planChartD
   return (
     <div className="card p-5 mb-6 no-print">
       {/* Header */}
-      <div className="flex items-center gap-2 mb-1">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-2 w-full text-left mb-1 group"
+      >
         <Zap size={15} className="text-amber-400" />
-        <h3 className="text-sm font-semibold text-slate-300">Lump Sum Advisor</h3>
-      </div>
-      <p className="text-xs text-slate-500 mb-4">
-        Enter a one-off amount to see where depositing it makes the biggest dent in your debt.
-      </p>
+        <h3 className="text-sm font-semibold text-slate-300 group-hover:text-slate-100 transition-colors">
+          Lump Sum Advisor
+        </h3>
+        <span className="ml-auto text-slate-500 group-hover:text-slate-400 transition-colors">
+          {open ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+        </span>
+      </button>
 
-      {/* Input row */}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">£</span>
-          <input
-            type="number"
-            min={1}
-            step={1}
-            placeholder="e.g. 1300"
-            value={amount}
-            onChange={e => { setAmount(e.target.value); setResult(null); }}
-            className="pl-7 w-36 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-teal-500"
-          />
-        </div>
-
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-400">Apply in month</span>
-          <select
-            value={applyMonth}
-            onChange={e => { setApplyMonth(Number(e.target.value)); setResult(null); }}
-            className="bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-teal-500"
-          >
-            {(planChartData || Array.from({ length: maxMonth }, (_, i) => ({ month: i + 1, date: null }))).map(p => (
-              <option key={p.month} value={p.month}>
-                {p.date ? formatMonthLabel(p.date) : `Month ${p.month}`}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <button
-          onClick={handleAnalyse}
-          disabled={loading || !amount || parseFloat(amount) <= 0}
-          className="btn-teal text-xs disabled:opacity-50"
-        >
-          {loading ? <Spinner size={13} /> : 'Analyse'}
-        </button>
-      </div>
-
-      {/* Error */}
-      {error && (
-        <p className="mt-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
-          {error}
+      {!open && (
+        <p className="text-xs text-slate-500">
+          Analyse where a one-off payment makes the biggest dent in your debt.
         </p>
       )}
 
-      {/* Results */}
-      {result && (
-        <div className="mt-5">
-          {/* Baseline strip */}
-          <p className="text-xs text-slate-500 mb-3">
-            Without this payment — debt-free{' '}
-            <span className="text-slate-300">{result.baseline.debtFreeDate}</span>,{' '}
-            <span className="text-slate-300">{gbp(result.baseline.totalInterest, 0)}</span> total interest
-            {' '}({monthsLabel(result.baseline.payoffMonths)})
+      {open && (
+        <>
+          <p className="text-xs text-slate-500 mb-4">
+            Enter a one-off amount to see where depositing it makes the biggest dent in your debt.
           </p>
 
-          {/* Option cards */}
-          <div className={`grid gap-4 ${result.options.length === 1 ? 'grid-cols-1 max-w-xs' : result.options.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
-            {result.options.map(option => (
-              <OptionCard
-                key={option.id}
-                option={option}
-                amount={result.amount}
-                applyMonth={result.applyMonth}
-                onWindfallSaved={onWindfallSaved}
+          {/* Input row */}
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm">£</span>
+              <input
+                type="number"
+                min={1}
+                step={1}
+                placeholder="e.g. 1300"
+                value={amount}
+                onChange={e => { setAmount(e.target.value); setResult(null); }}
+                className="pl-7 w-36 bg-slate-700 border border-slate-600 rounded px-3 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-teal-500"
               />
-            ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-slate-400">Apply in month</span>
+              <select
+                value={applyMonth}
+                onChange={e => { setApplyMonth(Number(e.target.value)); setResult(null); }}
+                className="bg-slate-700 border border-slate-600 rounded px-2 py-1.5 text-sm text-slate-100 focus:outline-none focus:border-teal-500"
+              >
+                {(planChartData || Array.from({ length: maxMonth }, (_, i) => ({ month: i + 1, date: null }))).map(p => (
+                  <option key={p.month} value={p.month}>
+                    {p.date ? formatMonthLabel(p.date) : `Month ${p.month}`}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <button
+              onClick={handleAnalyse}
+              disabled={loading || !amount || parseFloat(amount) <= 0}
+              className="btn-teal text-xs disabled:opacity-50"
+            >
+              {loading ? <Spinner size={13} /> : 'Analyse'}
+            </button>
           </div>
-        </div>
+
+          {/* Error */}
+          {error && (
+            <p className="mt-3 text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          {/* Results */}
+          {result && (
+            <div className="mt-5">
+              <p className="text-xs text-slate-500 mb-3">
+                Without this payment — debt-free{' '}
+                <span className="text-slate-300">{result.baseline.debtFreeDate}</span>,{' '}
+                <span className="text-slate-300">{gbp(result.baseline.totalInterest, 0)}</span> total interest
+                {' '}({monthsLabel(result.baseline.payoffMonths)})
+              </p>
+              <div className={`grid gap-4 ${result.options.length === 1 ? 'grid-cols-1 max-w-xs' : result.options.length === 2 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'}`}>
+                {result.options.map(option => (
+                  <OptionCard
+                    key={option.id}
+                    option={option}
+                    amount={result.amount}
+                    applyMonth={result.applyMonth}
+                    onWindfallSaved={onWindfallSaved}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

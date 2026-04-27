@@ -26,11 +26,33 @@ app.use('/api/advisor',   require('./routes/advisor'));
 
 app.get('/api/health', (req, res) => res.json({ ok: true }));
 
+// Test-only reset endpoint — wipes all data so each E2E test starts clean
+if (process.env.NODE_ENV === 'test') {
+  app.post('/api/__reset', (req, res) => {
+    const db = getDb();
+    db.exec(`
+      DELETE FROM messages;
+      DELETE FROM conversations;
+      DELETE FROM spending_actuals;
+      DELETE FROM progress_snapshots;
+      DELETE FROM plan_cache;
+      DELETE FROM expense_events;
+      DELETE FROM windfalls;
+      DELETE FROM expenses;
+      DELETE FROM income_sources;
+      DELETE FROM tranches;
+      DELETE FROM debts;
+      DELETE FROM settings;
+    `);
+    res.json({ ok: true });
+  });
+}
+
 app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(500).json({ error: err.message || 'Internal server error' });
 });
 
 app.listen(PORT, () => {
-  console.log(`Financial Planner API running on http://localhost:${PORT}`);
+  console.log(`Liam's Wicked Financial Planner Tool API running on http://localhost:${PORT}`);
 });

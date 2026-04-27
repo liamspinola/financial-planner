@@ -155,11 +155,21 @@ router.post('/whatif', (req, res) => {
   const summary = computeSummary(income, expenses, debts, tranches);
   if (summary.hasDeficit) return res.status(422).json({ error: 'deficit' });
 
+  // Match emergency fund delay logic from POST /plan so what-if results are consistent
+  const settings = db.prepare('SELECT key, value FROM settings').all();
+  const settingsMap = Object.fromEntries(settings.map(s => [s.key, Number(s.value)]));
+  const efTarget  = settingsMap.emergency_fund_target  || 0;
+  const efCurrent = settingsMap.emergency_fund_current || 0;
+  const efNeeded  = Math.max(0, efTarget - efCurrent);
+  const fundingDelay = (summary.availableForDebt > 0 && efNeeded > 0)
+    ? Math.ceil(efNeeded / summary.availableForDebt)
+    : 0;
+
   const debtMap   = groupTranchsByDebt(debts, tranches);
   const startDate = new Date();
 
-  const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, 0, expenseEvents);
-  const scenario = simulate(debtMap, summary.availableForDebt + extraMonthly, 'avalanche', startDate, windfalls, 0, expenseEvents);
+  const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay, expenseEvents);
+  const scenario = simulate(debtMap, summary.availableForDebt + extraMonthly, 'avalanche', startDate, windfalls, fundingDelay, expenseEvents);
 
   res.json({
     baseline: {
@@ -214,8 +224,9 @@ router.post('/lumpsum', (req, res) => {
   const debtMap   = groupTranchsByDebt(debts, tranches);
   const startDate = new Date();
 
-  // Baseline simulation (no lump sum)
-  const baseline = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay, expenseEvents);
+  // Baseline simulations (no lump sum) — each strategy compared against its own baseline
+  const baseline   = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate, windfalls, fundingDelay, expenseEvents);
+  const sbBaseline = simulate(debtMap, summary.availableForDebt, 'snowball',  startDate, windfalls, fundingDelay, expenseEvents);
   const baselineDateStr = formatDebtFreeDate(startDate, baseline.payoffMonths);
 
   // Use projected debt balances at applyMonth-1 so targets reflect which debts are still active then.
@@ -249,7 +260,35 @@ router.post('/lumpsum', (req, res) => {
 
   const options = [];
 
-  // Option 1: Avalanche — apply to highest-APR debt
+  // Compute how the lump sum cascades through debts sorted by APR (for display)
+  const sortedByApr = [...debtMap.entries()]
+    .map(([id, g]) => ({
+      id,
+      name: g.debtName,
+      balance: balAtApply(id, g),
+      apr: Math.max(...g.tranches.map(t => t.apr)),
+    }))
+    .filter(e => e.balance > 0)
+    .sort((a, b) => b.apr - a.apr);
+
+  let avAmountLeft = amount;
+  const avClearedDebts = [];
+  let avRemainderTarget = null;
+  for (const entry of sortedByApr) {
+    if (avAmountLeft <= 0.005) break;
+    if (entry.balance <= avAmountLeft) {
+      avClearedDebts.push({ debtId: entry.id, debtName: entry.name, amount: entry.balance });
+      avAmountLeft -= entry.balance;
+    } else {
+      avRemainderTarget = { debtId: entry.id, debtName: entry.name };
+      avAmountLeft = 0;
+      break;
+    }
+  }
+  // Cascade display triggers whenever at least one debt is fully cleared
+  const avHasCascade = avClearedDebts.length > 0;
+
+  // Option 1: Avalanche — apply to highest-APR debt (cascades to next-highest if amount exceeds it)
   if (avalancheTargetId !== null) {
     const avSim = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate,
       [...windfalls, { apply_month: applyMonth, amount }], fundingDelay, expenseEvents);
@@ -257,16 +296,18 @@ router.post('/lumpsum', (req, res) => {
     options.push({
       id: 'avalanche',
       name: 'Highest Rate First',
-      targetDebtId: avalancheTargetId,
-      targetDebtName: avGroup.debtName,
-      targetApr: highestApr,
+      // When cascade occurs, suppress single-target display — clearDetail shows the breakdown
+      targetDebtId:   avHasCascade ? null : avalancheTargetId,
+      targetDebtName: avHasCascade ? null : avGroup.debtName,
+      targetApr:      avHasCascade ? null : highestApr,
       payoffMonths: avSim.payoffMonths,
       totalInterest: avSim.totalInterest,
       monthsSaved: Math.max(0, baseline.payoffMonths - avSim.payoffMonths),
       interestSaved: Math.max(0, baseline.totalInterest - avSim.totalInterest),
       debtFreeDate: formatDebtFreeDate(startDate, avSim.payoffMonths),
       recommended: false,
-      reasoning: 'Attacking your highest-interest debt first reduces the total interest you pay.',
+      reasoning: 'Attacking your highest-interest debts first minimises the total interest you pay.',
+      clearDetail: avHasCascade ? { cleared: avClearedDebts, remainderTarget: avRemainderTarget } : null,
     });
   }
 
@@ -283,8 +324,8 @@ router.post('/lumpsum', (req, res) => {
       targetApr: sbGroup.tranches.length > 0 ? Math.max(...sbGroup.tranches.map(t => t.apr)) : 0,
       payoffMonths: sbSim.payoffMonths,
       totalInterest: sbSim.totalInterest,
-      monthsSaved: Math.max(0, baseline.payoffMonths - sbSim.payoffMonths),
-      interestSaved: Math.max(0, baseline.totalInterest - sbSim.totalInterest),
+      monthsSaved: Math.max(0, sbBaseline.payoffMonths - sbSim.payoffMonths),
+      interestSaved: Math.max(0, sbBaseline.totalInterest - sbSim.totalInterest),
       debtFreeDate: formatDebtFreeDate(startDate, sbSim.payoffMonths),
       recommended: false,
       reasoning: 'Clearing a smaller debt first frees its minimum payment for immediate snowball rollover.',
@@ -317,7 +358,7 @@ router.post('/lumpsum', (req, res) => {
     }
 
     if (cleared.length > 0) {
-      const ccSim = simulate(debtMap, summary.availableForDebt, 'avalanche', startDate,
+      const ccSim = simulate(debtMap, summary.availableForDebt, 'snowball', startDate,
         [...windfalls, { apply_month: applyMonth, amount }], fundingDelay, expenseEvents);
 
       const clearedNames = cleared.map(c => c.debtName);
@@ -329,8 +370,8 @@ router.post('/lumpsum', (req, res) => {
         targetApr: null,
         payoffMonths: ccSim.payoffMonths,
         totalInterest: ccSim.totalInterest,
-        monthsSaved: Math.max(0, baseline.payoffMonths - ccSim.payoffMonths),
-        interestSaved: Math.max(0, baseline.totalInterest - ccSim.totalInterest),
+        monthsSaved: Math.max(0, sbBaseline.payoffMonths - ccSim.payoffMonths),
+        interestSaved: Math.max(0, sbBaseline.totalInterest - ccSim.totalInterest),
         debtFreeDate: formatDebtFreeDate(startDate, ccSim.payoffMonths),
         recommended: false,
         reasoning: `Eliminating ${clearedNames.length === 1 ? 'a debt' : 'multiple debts'} completely frees up their minimum payments immediately.`,

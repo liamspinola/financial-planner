@@ -1,0 +1,181 @@
+<h2>Expert Panel Review — Round 5</h2>
+<p class="subtitle">New critical finding: mobile UI. Plus final architectural pass.</p>
+
+<div class="section">
+  <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:14px;margin-bottom:16px;font-size:0.88em">
+    <strong style="color:#dc2626">🚨 V1 Blocker Found: The app does not work on a phone.</strong><br>
+    The sidebar is a fixed 224px wide. On a 390px iPhone, that leaves <strong>166px</strong> for all app content. There is no hamburger menu, no drawer, no mobile nav — it is a desktop-only layout. The entire purpose of this project is for your brother to use it on his phone. This must be fixed as part of v1, not deferred to v2.
+  </div>
+</div>
+
+<div class="section">
+  <h3>Mobile Audit Results</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:0.85em;margin-bottom:16px">
+    <div style="background:#f0fdf4;border-radius:8px;padding:12px;border:1px solid #bbf7d0">
+      <strong style="color:#15803d">✅ Already works</strong>
+      <ul style="margin:8px 0 0;padding-left:16px;line-height:1.8;color:#374151">
+        <li>Viewport meta tag present</li>
+        <li>Some responsive prefixes (sm:, lg:)</li>
+        <li>Flexbox-based layouts</li>
+        <li>Recharts ResponsiveContainer on dashboard</li>
+      </ul>
+    </div>
+    <div style="background:#fef2f2;border-radius:8px;padding:12px;border:1px solid #fecaca">
+      <strong style="color:#dc2626">❌ Broken on mobile</strong>
+      <ul style="margin:8px 0 0;padding-left:16px;line-height:1.8;color:#374151">
+        <li>Sidebar: fixed w-56 (224px), no collapse</li>
+        <li>No hamburger menu or mobile drawer</li>
+        <li>Fixed-width inputs (w-36, w-28, w-24)</li>
+        <li>Plan chart hardcoded 680px wide</li>
+        <li>Budget table: 5 columns, no overflow-x-auto</li>
+        <li>AI advisor chat: second fixed w-56 panel</li>
+        <li>Form rows don't stack on mobile</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e293b;color:#f1f5f9;padding:12px 16px;font-weight:bold">👔 CTO — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Promote mobile layout to v1 blocker. Everything else is irrelevant if the app doesn't work on the only device your user has.</strong></p>
+      <p>The expert panel has spent four rounds discussing auth, AI providers, GDPR, TypeScript, and deployment — all of which are important — but none of it matters if the app renders unusably on a 390px screen. This is the most critical gap found across all reviews.</p>
+      <p><strong>Strategic choice — don't just patch, go mobile-first:</strong> The temptation is to add responsive breakpoints as a quick fix. Don't. The current component tree was designed desktop-first. Patching it with `md:hidden` and `hidden md:flex` will produce a fragile, inconsistent experience. The right move is to redesign the layout as mobile-first (base styles = phone, `md:` = desktop enhancement) as part of the TypeScript migration. You're already rewriting the components for TypeScript — do the mobile layout at the same time. Not separately, not later.</p>
+      <p><strong>Bottom navigation vs hamburger menu:</strong> Most mobile finance apps (Monzo, Emma, Plum) use a bottom tab bar, not a hamburger. For your brother, bottom navigation is more discoverable and easier to reach with one thumb. This is a product decision, not just a technical one — make it deliberately.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e3a5f;color:#f1f5f9;padding:12px 16px;font-weight:bold">⚙️ Senior Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Systematic fix list — not a one-liner patch.</strong></p>
+      <p><strong>The Tailwind mobile-first rule:</strong> In Tailwind, unprefixed classes apply to all sizes. Responsive prefixes (<code>md:</code>, <code>lg:</code>) apply at that breakpoint and above. The correct pattern is: write mobile styles first (no prefix), then layer desktop styles (<code>md:</code>). The current codebase does the opposite — desktop styles are the default, mobile is not considered.</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">// Current (desktop-first, broken on mobile):
+&lt;div className="flex min-h-screen"&gt;
+  &lt;Sidebar className="w-56" /&gt;
+
+// Fixed (mobile-first):
+&lt;div className="flex flex-col md:flex-row min-h-screen"&gt;
+  &lt;Sidebar className="hidden md:flex md:w-56" /&gt;
+  &lt;BottomNav className="fixed bottom-0 md:hidden" /&gt;</pre>
+
+      <p><strong>Specific fixes needed across the codebase:</strong></p>
+      <ul style="padding-left:20px;line-height:1.8">
+        <li>App layout: <code>flex-col md:flex-row</code>, sidebar <code>hidden md:flex</code>, bottom nav on mobile</li>
+        <li>All fixed-width inputs: replace <code>w-36</code>/<code>w-28</code> with <code>w-full</code> or <code>flex-1 min-w-0</code></li>
+        <li>Form rows: <code>flex-col sm:flex-row</code> so controls stack on narrow screens</li>
+        <li>Budget table: wrap in <code>overflow-x-auto</code> container</li>
+        <li>Plan chart: remove hardcoded 680px width, use <code>ResponsiveContainer width="100%"</code></li>
+        <li>AI advisor panel: stack vertically on mobile (<code>flex-col md:flex-row</code>)</li>
+        <li>All touch targets: minimum <code>min-h-[44px]</code> on interactive elements</li>
+        <li>Typography: verify readability at mobile scale — some labels may be too small</li>
+      </ul>
+
+      <p><strong>TypeScript migration timing is an advantage here:</strong> Since you're already rewriting components to TypeScript, mobile-first refactoring happens in the same pass. The total work is less than doing them separately.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#14532d;color:#f1f5f9;padding:12px 16px;font-weight:bold">🏗️ Senior Solutions Architect — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Navigation architecture decision drives everything else — make it now.</strong></p>
+      <p>The sidebar is the root of the component tree. Every view is a child of the layout that includes the sidebar. Changing the navigation pattern is a structural change that affects every screen. This is not a CSS tweak — it's an architectural change that needs to be decided before components are written in TypeScript.</p>
+
+      <p><strong>Two viable navigation architectures:</strong></p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:12px 0">
+        <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+          <strong>Option A: Bottom tab bar (mobile) + sidebar (desktop)</strong><br>
+          <span style="font-size:0.9em;color:#64748b">Bottom nav shows 4–5 key sections. Sidebar shows on md+ breakpoint. Same routes, different chrome. Standard pattern for finance apps. More discoverable for non-technical users.</span>
+        </div>
+        <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+          <strong>Option B: Hamburger drawer (mobile) + sidebar (desktop)</strong><br>
+          <span style="font-size:0.9em;color:#64748b">Hidden off-screen drawer slides in on hamburger tap. Simpler to implement, familiar pattern. Less discoverable — non-technical users may not find the hamburger.</span>
+        </div>
+      </div>
+      <p><strong>Recommendation: Option A.</strong> Bottom tab bar is the right choice for a non-technical phone user. It's always visible, always reachable with one thumb, and matches every finance app they've seen. Add it to the implementation plan now.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#4c1d95;color:#f1f5f9;padding:12px 16px;font-weight:bold">🤖 Senior AI Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: AI chat interface has specific mobile problems that need direct attention.</strong></p>
+      <p><strong>Virtual keyboard problem:</strong> On mobile, when the user taps the AI chat input, the virtual keyboard appears and can reduce the visible viewport height by 40–60%. If the chat interface uses fixed heights or <code>h-screen</code>, the input box will be hidden behind the keyboard. Use <code>dvh</code> (dynamic viewport height) units instead of <code>vh</code>, and ensure the chat scroll container adjusts when the keyboard appears.</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">/* Use dynamic viewport height for chat container */
+.chat-container {
+  height: 100dvh; /* adjusts when keyboard appears */
+  /* not: height: 100vh */
+}</pre>
+      <p><strong>Streaming on mobile networks:</strong> SSE streaming works on mobile networks but can stall on poor connections. Add a connection timeout — if no token received within 10 seconds, show a "Connection slow — tap to retry" message rather than an infinite loading state.</p>
+      <p><strong>Touch-friendly AI input:</strong> The chat text input needs <code>min-h-[44px]</code>, adequate font size (minimum 16px to prevent iOS auto-zoom on focus), and a clearly tappable send button. These are easy to miss when designing on desktop.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#7c2d12;color:#f1f5f9;padding:12px 16px;font-weight:bold">🧪 Senior QA Automation Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Add mobile viewport to every Playwright test — not just a dedicated mobile test suite.</strong></p>
+      <p>The instinct is to create a separate "mobile test suite." Don't. Every feature test should run at both desktop and mobile viewport. If a feature works on desktop but breaks on mobile, you want to know immediately — not when it's caught in a dedicated mobile sweep.</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">// playwright.config.ts
+projects: [
+  { name: 'desktop', use: { viewport: { width: 1280, height: 720 } } },
+  { name: 'mobile', use: devices['iPhone 14'] },  // 390×844
+  { name: 'android', use: devices['Pixel 7'] },   // 412×915
+]</pre>
+      <p><strong>Specific tests to add for mobile:</strong></p>
+      <ul style="padding-left:20px;line-height:1.8">
+        <li>Bottom nav: all tabs are tappable and navigate correctly at 390px</li>
+        <li>Debt form: all inputs are accessible and submittable with virtual keyboard open</li>
+        <li>Budget table: scrolls horizontally without breaking layout</li>
+        <li>AI chat: input is visible when keyboard is open, streaming renders correctly</li>
+        <li>Plan chart: renders at full width with no horizontal overflow</li>
+      </ul>
+      <p><strong>Visual regression testing:</strong> For the mobile layout refactor, consider adding Playwright screenshot comparison tests for the key views at 390px. This catches CSS regressions that functional tests miss.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#134e4a;color:#f1f5f9;padding:12px 16px;font-weight:bold">📋 Senior Product Manager — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Mobile-first is not a technical concern — it's the product vision. This is now the top priority.</strong></p>
+      <p>Everything we've built toward — auth, AI, PWA install, EU hosting — is meaningless if your brother opens the app on his phone and can't see the content. The sidebar eating 57% of the screen width is a showstopper, not a polish item.</p>
+      <p><strong>Navigation recommendation for a non-technical user:</strong> Bottom tab bar with 4 sections maximum:
+      <br>📊 Plan · 💳 Debts · 💰 Budget · 🤖 AI</p>
+      <p>Keep it simple. He doesn't need to see all the navigation options at once — he needs to find his debt plan immediately. The first tab he sees should be his plan, not a blank dashboard asking him to add debts.</p>
+      <p><strong>Revised v1 scope — add to plan:</strong></p>
+      <ul style="padding-left:20px;line-height:1.8">
+        <li>Mobile-first layout (bottom nav on mobile, sidebar on desktop) — v1 blocker</li>
+        <li>All inputs and tables responsive at 390px — v1 blocker</li>
+        <li>AI chat keyboard-aware — v1 blocker</li>
+        <li>Playwright mobile viewport tests — v1 blocker</li>
+      </ul>
+      <p><strong>Move to v2 (was v1):</strong> Onboarding wizard can slip to early v2 — your brother can figure out the app if it actually renders correctly on his phone. Mobile layout is the higher priority.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Updated Implementation Plan — Phase 5b (New): Mobile-First UI</h3>
+  <div style="background:#f8fafc;border-radius:8px;padding:16px;border:1px solid #e2e8f0;font-size:0.88em;line-height:1.8">
+    <p><strong>Insert as Phase 5b between PWA (5) and GDPR (6):</strong></p>
+    <ol style="padding-left:20px">
+      <li>Decide navigation pattern: bottom tab bar (recommended) vs hamburger drawer</li>
+      <li>Redesign App layout: <code>flex-col md:flex-row</code>, sidebar <code>hidden md:flex</code></li>
+      <li>Build <code>BottomNav.tsx</code>: 4 tabs, fixed bottom, <code>md:hidden</code></li>
+      <li>Replace all fixed-width inputs with <code>w-full</code> / <code>flex-1 min-w-0</code></li>
+      <li>Wrap all tables in <code>overflow-x-auto</code> containers</li>
+      <li>Replace hardcoded 680px chart width with <code>ResponsiveContainer width="100%"</code> everywhere</li>
+      <li>Stack form rows: <code>flex-col sm:flex-row</code> pattern throughout</li>
+      <li>AI chat: use <code>dvh</code> units, min 16px input font size, 44px tap targets</li>
+      <li>Add mobile viewport projects to <code>playwright.config.ts</code> (iPhone 14 + Pixel 7)</li>
+      <li>Run Lighthouse mobile audit — fix until 90+ Performance</li>
+    </ol>
+  </div>
+</div>
+
+<div class="section">
+  <div style="background:#fef9c3;border-radius:8px;padding:14px;border:1px solid #fde047;font-size:0.88em">
+    <strong>Panel consensus after 5 rounds:</strong> The architecture and security design is solid and complete. The one remaining gap is the mobile UI — it's a v1 blocker that must be added to the implementation plan as its own phase. Everything else is in order.
+  </div>
+</div>

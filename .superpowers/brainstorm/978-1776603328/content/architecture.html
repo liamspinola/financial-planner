@@ -1,0 +1,133 @@
+<h2>Proposed Architecture</h2>
+<p class="subtitle">Hosted PWA with multi-tenancy, social auth, and a pluggable AI layer</p>
+
+<div class="section">
+  <h3>System Overview</h3>
+  <div style="background:#0f172a;border-radius:12px;padding:24px;font-family:monospace;font-size:0.82em;color:#e2e8f0;line-height:1.8">
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;text-align:center">
+      <div style="background:#1e3a5f;border-radius:8px;padding:12px">
+        <div style="color:#60a5fa;font-weight:bold;margin-bottom:8px">📱 CLIENT</div>
+        <div style="color:#94a3b8;font-size:0.9em">React 19 + Vite</div>
+        <div style="color:#94a3b8;font-size:0.9em">Tailwind CSS</div>
+        <div style="color:#94a3b8;font-size:0.9em">PWA manifest</div>
+        <div style="color:#94a3b8;font-size:0.9em">Service worker</div>
+        <div style="margin-top:8px;color:#34d399;font-size:0.8em">Vercel (free)</div>
+      </div>
+      <div style="background:#1e3a5f;border-radius:8px;padding:12px">
+        <div style="color:#60a5fa;font-weight:bold;margin-bottom:8px">⚙️ SERVER</div>
+        <div style="color:#94a3b8;font-size:0.9em">Express 5 (existing)</div>
+        <div style="color:#94a3b8;font-size:0.9em">Auth middleware</div>
+        <div style="color:#94a3b8;font-size:0.9em">AI router layer</div>
+        <div style="color:#94a3b8;font-size:0.9em">Row-level user isolation</div>
+        <div style="margin-top:8px;color:#34d399;font-size:0.8em">Railway (~£5/mo)</div>
+      </div>
+      <div style="background:#1e3a5f;border-radius:8px;padding:12px">
+        <div style="color:#60a5fa;font-weight:bold;margin-bottom:8px">🗄️ DATABASE</div>
+        <div style="color:#94a3b8;font-size:0.9em">PostgreSQL</div>
+        <div style="color:#94a3b8;font-size:0.9em">(replaces SQLite)</div>
+        <div style="color:#94a3b8;font-size:0.9em">user_id on all tables</div>
+        <div style="color:#94a3b8;font-size:0.9em">Migrations via Drizzle</div>
+        <div style="margin-top:8px;color:#34d399;font-size:0.8em">Supabase (free tier)</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;text-align:center">
+      <div style="background:#1e3a5f;border-radius:8px;padding:12px">
+        <div style="color:#f472b6;font-weight:bold;margin-bottom:8px">🔐 AUTH</div>
+        <div style="color:#94a3b8;font-size:0.9em">Clerk (free up to 10k users)</div>
+        <div style="color:#94a3b8;font-size:0.9em">Google + Apple login</div>
+        <div style="color:#94a3b8;font-size:0.9em">Email magic link</div>
+        <div style="color:#94a3b8;font-size:0.9em">JWT → user_id on requests</div>
+      </div>
+      <div style="background:#1e3a5f;border-radius:8px;padding:12px">
+        <div style="color:#fb923c;font-weight:bold;margin-bottom:8px">🤖 AI LAYER</div>
+        <div style="color:#94a3b8;font-size:0.9em">Default: Gemini Flash (free)</div>
+        <div style="color:#94a3b8;font-size:0.9em">BYOK: Anthropic API key</div>
+        <div style="color:#94a3b8;font-size:0.9em">Stored encrypted per-user</div>
+        <div style="color:#94a3b8;font-size:0.9em">Provider auto-selected</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>What Changes vs What Stays</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div style="background:#f0fdf4;border-radius:8px;padding:16px;border:1px solid #bbf7d0">
+      <div style="color:#16a34a;font-weight:bold;margin-bottom:8px">✅ Stays (reused)</div>
+      <ul style="margin:0;padding-left:18px;color:#374151;font-size:0.9em;line-height:1.8">
+        <li>All financial calculation engine</li>
+        <li>All amortisation / strategy logic</li>
+        <li>All React UI components</li>
+        <li>All REST API routes (structure)</li>
+        <li>Recharts visualisations</li>
+        <li>Existing E2E + unit tests</li>
+      </ul>
+    </div>
+    <div style="background:#fff7ed;border-radius:8px;padding:16px;border:1px solid #fed7aa">
+      <div style="color:#c2410c;font-weight:bold;margin-bottom:8px">🔧 Changes needed</div>
+      <ul style="margin:0;padding-left:18px;color:#374151;font-size:0.9em;line-height:1.8">
+        <li>SQLite → PostgreSQL</li>
+        <li>Add user_id to all DB tables</li>
+        <li>Add Clerk auth middleware</li>
+        <li>Claude CLI → AI provider abstraction</li>
+        <li>Add PWA manifest + service worker</li>
+        <li>Deployment config (Railway + Vercel)</li>
+        <li>User settings page (AI key input)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>User Experience on Phone</h3>
+  <div style="display:flex;gap:12px;overflow-x:auto;padding-bottom:8px">
+    <div style="min-width:140px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:12px;text-align:center;font-size:0.8em">
+      <div style="font-size:1.5em;margin-bottom:6px">🔗</div>
+      <strong>1. Open link</strong>
+      <p style="color:#64748b;margin:4px 0 0">You send brother a URL. He opens it in Chrome/Safari.</p>
+    </div>
+    <div style="min-width:140px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:12px;text-align:center;font-size:0.8em">
+      <div style="font-size:1.5em;margin-bottom:6px">🔑</div>
+      <strong>2. Sign in</strong>
+      <p style="color:#64748b;margin:4px 0 0">Tap "Continue with Google". Done. No password.</p>
+    </div>
+    <div style="min-width:140px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:12px;text-align:center;font-size:0.8em">
+      <div style="font-size:1.5em;margin-bottom:6px">📲</div>
+      <strong>3. Install prompt</strong>
+      <p style="color:#64748b;margin:4px 0 0">"Add to Home Screen" banner. Taps it — icon on phone.</p>
+    </div>
+    <div style="min-width:140px;background:#f8fafc;border-radius:10px;border:1px solid #e2e8f0;padding:12px;text-align:center;font-size:0.8em">
+      <div style="font-size:1.5em;margin-bottom:6px">📊</div>
+      <strong>4. Uses app</strong>
+      <p style="color:#64748b;margin:4px 0 0">Full debt planner. AI via Gemini by default.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>AI Provider Logic</h3>
+  <div style="background:#fafafa;border-radius:8px;padding:16px;border:1px solid #e5e7eb;font-size:0.88em;line-height:1.7">
+    <strong>Server checks per request:</strong><br>
+    1. Does this user have a stored Anthropic API key? → use Claude API (their cost)<br>
+    2. No key? → use Gemini Flash free tier (your cost: £0)<br>
+    3. Gemini free quota exceeded? → graceful fallback message to user<br><br>
+    <strong>Key stored:</strong> Encrypted in PostgreSQL, never exposed to client. User can add/remove in Settings.
+  </div>
+</div>
+
+<div class="section">
+  <h3>Cost Estimate (Monthly)</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:0.88em">
+    <tr style="background:#f1f5f9">
+      <th style="text-align:left;padding:8px;border-radius:4px 0 0 4px">Service</th>
+      <th style="text-align:left;padding:8px">Provider</th>
+      <th style="text-align:right;padding:8px;border-radius:0 4px 4px 0">Cost</th>
+    </tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #f1f5f9">Frontend hosting</td><td style="padding:8px;border-bottom:1px solid #f1f5f9">Vercel</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9;color:#16a34a">Free</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #f1f5f9">Backend hosting</td><td style="padding:8px;border-bottom:1px solid #f1f5f9">Railway</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9">~£4–8/mo</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #f1f5f9">PostgreSQL</td><td style="padding:8px;border-bottom:1px solid #f1f5f9">Supabase</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9;color:#16a34a">Free (up to 500MB)</td></tr>
+    <tr><td style="padding:8px;border-bottom:1px solid #f1f5f9">Auth</td><td style="padding:8px;border-bottom:1px solid #f1f5f9">Clerk</td><td style="text-align:right;padding:8px;border-bottom:1px solid #f1f5f9;color:#16a34a">Free (up to 10k MAU)</td></tr>
+    <tr><td style="padding:8px">AI (default)</td><td style="padding:8px">Gemini Flash</td><td style="text-align:right;padding:8px;color:#16a34a">Free tier</td></tr>
+    <tr style="font-weight:bold;background:#f0fdf4"><td style="padding:8px;border-radius:4px 0 0 4px">Total</td><td style="padding:8px"></td><td style="text-align:right;padding:8px;border-radius:0 4px 4px 0;color:#16a34a">~£4–8/mo</td></tr>
+  </table>
+</div>

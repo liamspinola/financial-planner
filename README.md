@@ -1,4 +1,4 @@
-# Financial Planner
+# Liam's Wicked Financial Planner Tool
 
 A full-stack debt payoff planner for the UK. Enter your debts, income, and expenses to get a month-by-month payoff plan using the Avalanche or Snowball strategy, with optional AI-generated narrative via Claude.
 

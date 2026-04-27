@@ -16,7 +16,7 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="px-6 py-5 border-b border-slate-700">
         <h1 className="text-base font-semibold text-teal-400 leading-tight">
-          Financial<br />Planner
+          Liam's Wicked<br />Financial Planner Tool
         </h1>
       </div>
 

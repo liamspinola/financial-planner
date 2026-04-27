@@ -1,0 +1,107 @@
+<h2>Three Approaches to Multi-User Distribution</h2>
+<p class="subtitle">Which direction fits your goals? Select the one you prefer.</p>
+
+<div class="options">
+
+  <div class="option" data-choice="a" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Hosted Web App + PWA <span style="font-size:0.75em;background:#22c55e22;color:#16a34a;padding:2px 8px;border-radius:12px;margin-left:6px;">Recommended</span></h3>
+      <p style="margin-bottom:10px">Deploy the existing app to the cloud with user accounts. Your brother opens a URL, logs in, and adds it to his phone's home screen — it feels like an app. One codebase. One deployment. Scales to many users.</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Reuses ~90% of existing code</li>
+            <li>Works on every phone (iOS + Android)</li>
+            <li>No app store — instant updates</li>
+            <li>Scales from 2 users to 2,000</li>
+            <li>One codebase to maintain</li>
+            <li>Hosting costs ~$5–15/mo (Railway, Render, Fly.io)</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>Requires auth + cloud DB migration (SQLite → Postgres)</li>
+            <li>Ongoing hosting cost</li>
+            <li>Less "native" feel than a real app</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:8px;font-size:0.85em">
+        <strong>Stack changes needed:</strong> Add auth (Clerk or Auth0), migrate to PostgreSQL, deploy to Railway/Render, add PWA manifest. Claude AI switches from CLI subprocess → Anthropic API.
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="b" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Native Android App (React Native)</h3>
+      <p style="margin-bottom:10px">Rewrite the UI in React Native, sharing some business logic. Published to the Google Play Store. Your brother installs it like any app. Data stored locally on-device (no cloud sync).</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Best native phone experience</li>
+            <li>Offline-first — no internet needed</li>
+            <li>No hosting costs (data lives on device)</li>
+            <li>Familiar "install from Play Store" flow</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>Significant rewrite — React Native ≠ React web</li>
+            <li>Google Play Store setup + review process</li>
+            <li>Two separate codebases to maintain</li>
+            <li>iOS excluded (would need separate Apple Dev account)</li>
+            <li>Updates require store review cycle</li>
+            <li>No path to web product without more work</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:8px;font-size:0.85em">
+        <strong>Stack changes needed:</strong> React Native rewrite, Expo or bare workflow, SQLite on-device, Google Play Developer account ($25 one-time). Claude AI would need Anthropic API key per user.
+      </div>
+    </div>
+  </div>
+
+  <div class="option" data-choice="c" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Self-Hosted Docker Image</h3>
+      <p style="margin-bottom:10px">Package the app as a Docker image. Anyone technical enough can spin up their own private instance. Your brother would need someone to set it up for him (e.g., you deploy a copy on a cheap VPS just for him).</p>
+      <div class="pros-cons">
+        <div class="pros">
+          <h4>Pros</h4>
+          <ul>
+            <li>Minimal code changes to existing app</li>
+            <li>Each user gets fully isolated instance</li>
+            <li>Open source friendly</li>
+            <li>No shared infrastructure to maintain</li>
+          </ul>
+        </div>
+        <div class="cons">
+          <h4>Cons</h4>
+          <ul>
+            <li>You'd need to manage separate VPS per person</li>
+            <li>Doesn't scale — operational nightmare beyond a few people</li>
+            <li>Still needs a domain/URL for phone access</li>
+            <li>Dead end for a real product</li>
+            <li>No path to option C (product) from here</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:12px;padding:10px;background:#f8fafc;border-radius:8px;font-size:0.85em">
+        <strong>Stack changes needed:</strong> Dockerfile, nginx config, VPS setup per user. Manageable for 2–3 people, breaks down fast beyond that.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;padding:16px;background:#eff6ff;border-radius:10px;border-left:4px solid #3b82f6">
+  <strong>Expert panel verdict:</strong> All six perspectives align on <strong>Option A</strong>. It reuses what you've built, scales to a real product, works on every phone without an app store, and the code changes are well-defined. The Android route (B) only wins if offline-first is a hard requirement — and even then, a PWA with service workers gets you most of the way there.
+</div>

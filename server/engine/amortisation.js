@@ -36,13 +36,39 @@ function cloneGroups(debtMap) {
 }
 
 /**
+ * Apply a payment to tranches WITHOUT accruing interest first.
+ * Use this for overflow payments after interest has already been accrued this month.
+ * Tranches are paid highest-APR first (FCA CONC 6.7).
+ *
+ * @param {Array}  tranches - mutable tranche objects for one account
+ * @param {number} payment  - amount to apply (£)
+ * @returns {number} remaining payment not applied (all balance cleared)
+ */
+function applyPaymentToTranches(tranches, payment) {
+  const sorted = [...tranches]
+    .filter(t => t.balance > 0)
+    .sort((a, b) => b.apr - a.apr);
+
+  let remaining = payment;
+  for (const t of sorted) {
+    if (remaining <= 0) break;
+    const applied = Math.min(remaining, t.balance);
+    const original = tranches.find(x => x.id === t.id);
+    original.balance -= applied;
+    if (original.balance < 0.005) original.balance = 0;
+    remaining -= applied;
+  }
+  return remaining;
+}
+
+/**
  * Apply payment to an account's tranches following FCA CONC 6.7:
  * all payments (including minimum) go to highest-APR tranche first.
  *
  * @param {Array} tranches  - mutable array of tranche objects for one account
  * @param {number} payment  - total payment to apply (£)
  * @param {string} simMonth - ISO date string for promo expiry checks
- * @returns {number} total interest accrued this month across all tranches
+ * @returns {{ interest: number, remaining: number }} interest accrued + unapplied payment
  */
 function applyPaymentToAccount(tranches, payment, simMonth) {
   // Accrue interest first (interest accrues before payment is applied)
@@ -60,23 +86,8 @@ function applyPaymentToAccount(tranches, payment, simMonth) {
     totalInterest += interest;
   }
 
-  // Sort tranches highest APR first for payment allocation (FCA rules)
-  const sorted = [...tranches]
-    .filter(t => t.balance > 0)
-    .sort((a, b) => b.apr - a.apr);
-
-  let remaining = payment;
-  for (const t of sorted) {
-    if (remaining <= 0) break;
-    const applied = Math.min(remaining, t.balance);
-    // Find and update the original tranche object
-    const original = tranches.find(x => x.id === t.id);
-    original.balance -= applied;
-    if (original.balance < 0.005) original.balance = 0; // floating point cleanup
-    remaining -= applied;
-  }
-
-  return totalInterest;
+  const remaining = applyPaymentToTranches(tranches, payment);
+  return { interest: totalInterest, remaining };
 }
 
 /**
@@ -180,7 +191,7 @@ function simulate(debtMap, available, strategy, startDate, windfalls = [], fundi
     for (const g of activeGroups) {
       if (g === targetGroup) continue;
       const minPayment = effectiveMin(g);
-      const interest = applyPaymentToAccount(g.tranches, minPayment, simMonth);
+      const { interest } = applyPaymentToAccount(g.tranches, minPayment, simMonth);
       totalInterest += interest;
       monthState.totalInterestThisMonth += interest;
       monthState.payments.push({
@@ -194,7 +205,7 @@ function simulate(debtMap, available, strategy, startDate, windfalls = [], fundi
     // Apply effective minimum + extra to target account
     if (targetGroup) {
       const targetPayment = effectiveMin(targetGroup) + monthlyExtra;
-      const interest = applyPaymentToAccount(targetGroup.tranches, targetPayment, simMonth);
+      const { interest, remaining } = applyPaymentToAccount(targetGroup.tranches, targetPayment, simMonth);
       totalInterest += interest;
       monthState.totalInterestThisMonth += interest;
       monthState.payments.push({
@@ -203,6 +214,31 @@ function simulate(debtMap, available, strategy, startDate, windfalls = [], fundi
         amount: targetPayment,
         isTarget: true,
       });
+
+      // Cascade any overflow (e.g. lump sum exceeds target debt balance) to remaining
+      // debts in strategy order. Interest was already accrued above so we use
+      // applyPaymentToTranches (no re-accrual).
+      if (remaining > 0.005) {
+        const overflowTargets = activeGroups
+          .filter(g => g !== targetGroup && g.tranches.some(t => t.balance > 0))
+          .sort((a, b) => {
+            if (strategy === 'avalanche') {
+              const aprA = Math.max(-Infinity, ...a.tranches.filter(t => t.balance > 0).map(t => t.apr));
+              const aprB = Math.max(-Infinity, ...b.tranches.filter(t => t.balance > 0).map(t => t.apr));
+              return aprB - aprA;
+            } else {
+              const balA = a.tranches.reduce((s, t) => s + Math.max(0, t.balance), 0);
+              const balB = b.tranches.reduce((s, t) => s + Math.max(0, t.balance), 0);
+              return balA - balB;
+            }
+          });
+
+        let overflow = remaining;
+        for (const g of overflowTargets) {
+          if (overflow <= 0.005) break;
+          overflow = applyPaymentToTranches(g.tranches, overflow);
+        }
+      }
     }
 
     // Detect newly cleared debts and free their minimums.

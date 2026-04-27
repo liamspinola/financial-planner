@@ -1,0 +1,169 @@
+<h2>Expert Panel Review — Round 6</h2>
+<p class="subtitle">UI/UX engineer joins the panel. Final implementation plan review.</p>
+
+<div class="section">
+  <div style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:16px;font-size:0.88em">
+    <strong>Status:</strong> Stack ✅ · Security ✅ · TypeScript ✅ · Mobile layout (Phase 5b) ✅ · 9-phase plan written. This round adds a UI/UX perspective and closes the last remaining gaps.
+  </div>
+</div>
+
+<div class="section">
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#7e22ce;color:#f1f5f9;padding:12px 16px;font-weight:bold">🎨 Senior UI/UX Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Three issues that will make the app feel broken on real iPhones, plus four UX gaps.</strong></p>
+
+      <p><strong>Issue 1 — Safe area insets (will clip bottom nav on every modern iPhone):</strong> iPhones with Face ID have a home indicator bar at the bottom of the screen. Without CSS safe area insets, your bottom nav will sit underneath it — partially obscured and with the last 34px of tap target cut off. This affects every iPhone since the X (2017). Fix:</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">/* In manifest.json */
+"display": "standalone"  // required to enable safe area APIs
+
+/* In global CSS */
+:root {
+  --sat: env(safe-area-inset-top);
+  --sab: env(safe-area-inset-bottom);
+}
+.bottom-nav {
+  padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+}
+.page-content {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom)); /* above bottom nav */
+}</pre>
+      <p>Also add <code>&lt;meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"&gt;</code> — without <code>viewport-fit=cover</code> the safe area APIs don't activate.</p>
+
+      <p><strong>Issue 2 — Numeric keyboard for monetary inputs:</strong> When your brother taps a debt amount field on his phone, he'll get a full QWERTY keyboard by default. Fix: use <code>type="text" inputmode="decimal"</code> on all monetary and percentage inputs. Do NOT use <code>type="number"</code> — it shows increment arrows on desktop, has inconsistent decimal separator handling across locales, and causes iOS to show a different keyboard than expected.</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">&lt;input type="text" inputmode="decimal" placeholder="0.00" /&gt;  ✅
+&lt;input type="number" /&gt;  ❌ (wrong keyboard, locale issues)</pre>
+
+      <p><strong>Issue 3 — Dynamic Island / notch top padding:</strong> The top of the app also needs safe area treatment. If you have a fixed header or nav bar, it will sit behind the Dynamic Island on iPhone 14 Pro+. Add <code>padding-top: env(safe-area-inset-top)</code> to the top nav/header.</p>
+
+      <p><strong>UX Gap 1 — Empty states:</strong> Your brother's first screen after login will be an empty dashboard. What does he see? Right now: probably empty charts, zero values, and no guidance. Design explicit empty states for each tab with a clear call to action. For the Debts tab: "No debts yet — tap + to add your first debt." For Plan: "Add your income and at least one debt to see your payoff plan." These take an hour to build and completely change the first impression.</p>
+
+      <p><strong>UX Gap 2 — The hero metric:</strong> The most motivating number in a debt planner is the debt-free date. It should be the first thing your brother sees when he opens the app — large, prominent, above the fold. "You'll be debt-free by March 2028" is more powerful than any chart. Make this the focal point of the Plan tab on mobile, not a small stat buried in a row.</p>
+
+      <p><strong>UX Gap 3 — Loading states:</strong> Financial calculations and AI responses take time. A blank area that suddenly fills is jarring. Add skeleton loading states (animated grey rectangles in the shape of the content) for the plan summary and AI responses. Tailwind's <code>animate-pulse</code> with placeholder shapes is sufficient — no library needed.</p>
+
+      <p><strong>UX Gap 4 — Currency formatting:</strong> Use <code>Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' })</code> everywhere money is displayed. Never format currency manually with string concatenation. This handles edge cases (£1,234.56 vs £0.50) and is locale-correct.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e293b;color:#f1f5f9;padding:12px 16px;font-weight:bold">👔 CTO — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Phase 8 is in the wrong place. And the plan needs a definition of done.</strong></p>
+
+      <p><strong>Move prompt regression to Phase 4:</strong> Prompt regression review is currently Phase 8 — after deployment. That's backwards. If Gemini produces low-quality financial narratives compared to Claude, you need to know during Phase 4 (AI Layer), not after you've deployed to production and your brother is using it. Move it: Phase 4 step 10 should be "verify prompt quality with golden scenarios before proceeding — this is a gate, not a post-check."</p>
+
+      <p><strong>Definition of done for v1:</strong> The plan lists phases but doesn't define when v1 is "ready to send to your brother." Add a release checklist:</p>
+      <ul style="padding-left:20px;line-height:1.8">
+        <li>All Playwright tests pass (desktop + mobile viewports)</li>
+        <li><code>tsc --noEmit</code> passes with zero errors</li>
+        <li><code>npm audit</code> — zero high/critical vulnerabilities</li>
+        <li>Lighthouse: 90+ Performance (mobile), 100 PWA</li>
+        <li>Manual smoke test on real Android phone (not emulator)</li>
+        <li>Privacy policy live and linked in app footer</li>
+        <li>Account deletion tested end-to-end</li>
+        <li>UptimeRobot monitoring active</li>
+      </ul>
+
+      <p><strong>Top 3 implementation risks:</strong></p>
+      <ol style="padding-left:20px;line-height:1.8">
+        <li><strong>Gemini prompt quality</strong> — Claude CLI → Gemini may produce noticeably worse financial narratives. Mitigation: gate on Phase 4, adjust prompts before proceeding.</li>
+        <li><strong>Vercel 10s timeout under load</strong> — AI streaming via SSE should be fine, but if a response takes longer than 10s to start streaming the first token, Vercel will 504. Test with realistic prompts.</li>
+        <li><strong>SQLite → Postgres float precision migration</strong> — existing financial data may have float precision issues that go unnoticed until you compare outputs. The migration harness must catch this.</li>
+      </ol>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e3a5f;color:#f1f5f9;padding:12px 16px;font-weight:bold">⚙️ Senior Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Two implementation details to add, and Phases 5 + 5b should merge.</strong></p>
+
+      <p><strong>Merge Phase 5 (PWA) and Phase 5b (Mobile UI):</strong> These are both client-side work touching the same files — manifest, service worker, layout, components. Splitting them creates a phase boundary that doesn't reflect how you'll actually work. Merge into a single "Phase 5 — PWA + Mobile-First UI" phase. Fewer phase boundaries means less context-switching and cleaner commits.</p>
+
+      <p><strong>Add to Phase 5b — input modes throughout:</strong> Every monetary input needs <code>inputmode="decimal"</code>. Every percentage input needs <code>inputmode="decimal"</code>. This is a pass through all form components. Add it to the Phase 5b checklist alongside the fixed-width input replacements — it's the same audit pass.</p>
+
+      <p><strong>Add to Phase 5b — safe area insets:</strong> The safe area CSS (as described by the UI/UX engineer) needs to be added to the global stylesheet and the BottomNav component. This is a Phase 5b task, not a separate phase. Add it to the list.</p>
+
+      <p><strong>Viewport meta tag update:</strong> Current viewport meta tag needs <code>viewport-fit=cover</code> added. Single line change in <code>client/index.html</code>. Must be done before safe area insets work.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#14532d;color:#f1f5f9;padding:12px 16px;font-weight:bold">🏗️ Senior Solutions Architect — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Environment variable inventory is incomplete. Document it before Phase 7.</strong></p>
+      <p>The plan says "set all production env vars in Vercel dashboard" but doesn't enumerate them. This will cause delays during deployment. Here is the complete list:</p>
+      <table style="width:100%;border-collapse:collapse;font-size:0.82em;margin-top:8px">
+        <tr style="background:#f1f5f9"><th style="padding:5px 8px;text-align:left">Variable</th><th style="padding:5px 8px;text-align:left">Value source</th><th style="padding:5px 8px;text-align:left">Scope</th></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:5px 8px"><code>DATABASE_URL</code></td><td style="padding:5px 8px">Neon pooler connection string</td><td style="padding:5px 8px">Server only</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:5px 8px"><code>SUPABASE_URL</code></td><td style="padding:5px 8px">Supabase project URL</td><td style="padding:5px 8px">Server + client</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:5px 8px"><code>SUPABASE_ANON_KEY</code></td><td style="padding:5px 8px">Supabase anon/public key</td><td style="padding:5px 8px">Client only</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:5px 8px"><code>SUPABASE_SERVICE_KEY</code></td><td style="padding:5px 8px">Supabase service role key</td><td style="padding:5px 8px">Server only (never client)</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:5px 8px"><code>GEMINI_API_KEY</code></td><td style="padding:5px 8px">Google AI Studio API key</td><td style="padding:5px 8px">Server only</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:5px 8px"><code>BYOK_ENCRYPTION_KEY</code></td><td style="padding:5px 8px">32-byte random hex (generate once)</td><td style="padding:5px 8px">Server only</td></tr>
+        <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:5px 8px"><code>SENTRY_DSN</code></td><td style="padding:5px 8px">Sentry project DSN</td><td style="padding:5px 8px">Server + client</td></tr>
+        <tr style="background:#fafafa"><td style="padding:5px 8px"><code>CLIENT_ORIGIN</code></td><td style="padding:5px 8px">Vercel frontend URL</td><td style="padding:5px 8px">Server only (CORS)</td></tr>
+      </table>
+      <p style="margin-top:8px"><strong>Critical:</strong> <code>SUPABASE_SERVICE_KEY</code> must never be exposed to the client bundle. Vite prefixes client-side env vars with <code>VITE_</code> — only vars prefixed <code>VITE_</code> go into the browser. Server vars are never prefixed. This is already handled by Vite's design, but double-check after setup.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#4c1d95;color:#f1f5f9;padding:12px 16px;font-weight:bold">🤖 Senior AI Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Prompt regression must gate Phase 4 completion, not Phase 8.</strong></p>
+      <p>Agreeing with the CTO: the prompt regression review cannot be the last phase. Here's why — if Gemini produces low-quality output, you'll need to iterate on prompts. That iteration loop belongs in Phase 4 where the AI layer is being built, not after you've done PWA work, security work, GDPR work, and deployed. The cost of discovering bad prompts late is days of rework in a phase you thought was complete.</p>
+      <p><strong>Recommended: Capture Claude CLI output NOW before Phase 4 begins.</strong> Run 3–5 realistic scenarios through the existing Claude CLI today, save the outputs to <code>server/ai/prompts/golden-outputs/</code>. These become your quality baseline. Then during Phase 4, compare Gemini output to these saved examples before marking Phase 4 as done.</p>
+      <p><strong>SSE first-token latency check:</strong> Add to Phase 4 verification — measure time to first token from Gemini. If it exceeds 5 seconds on a realistic prompt, investigate. Vercel's 10s timeout means you need some headroom. The Gemini SDK's streaming API starts yielding tokens faster than waiting for the full response, so this should be fine — but verify it explicitly.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#7c2d12;color:#f1f5f9;padding:12px 16px;font-weight:bold">🧪 Senior QA Automation Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Add empty state tests and skeleton loading tests. These are commonly skipped and commonly broken.</strong></p>
+      <p><strong>Empty state tests:</strong> After the empty state designs are built (per UI/UX recommendation), write Playwright tests that assert: a new user (freshly registered, no data) sees the empty state CTA on each tab, not a blank screen or error.</p>
+      <p><strong>Skeleton loading tests:</strong> Test that the skeleton appears immediately on page load before data arrives (mock a slow API response with <code>page.route()</code> in Playwright to introduce a 500ms delay) and disappears once data loads.</p>
+      <p><strong>Currency formatting tests:</strong> Unit test the <code>Intl.NumberFormat</code> currency formatter with edge cases: £0, £0.01, £1,000, £1,000,000, negative values (for display). Format bugs in financial apps erode user trust fast.</p>
+      <p><strong>Safe area inset visual check:</strong> Can't be automated easily — add it to the manual release checklist: "Open app on physical iPhone, verify bottom nav is not clipped by home indicator, verify top header is not clipped by Dynamic Island."</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#134e4a;color:#f1f5f9;padding:12px 16px;font-weight:bold">📋 Senior Product Manager — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Empty states and hero metric are the highest-impact UX items in v1.</strong></p>
+      <p>The UI/UX engineer is right about both. The hero metric (debt-free date, prominent and above the fold) and empty states (clear CTAs for a blank account) are the difference between your brother opening the app and immediately understanding its value, versus opening it and staring at zeroes wondering what to do.</p>
+      <p><strong>This replaces the need for an onboarding wizard in v1.</strong> If the empty states are well-designed — "Add your first debt to get started" with a prominent button — your brother will know what to do without a wizard. The wizard (originally flagged as v2) can stay in v2. The empty states are simpler to build and achieve 80% of the same effect.</p>
+      <p><strong>The hero metric on mobile:</strong> Plan tab, top of screen, large text:
+      <br>"Debt-free by <strong>March 2028</strong>" with a secondary line "Save £4,200 in interest with Avalanche strategy." That's the motivating hook. Everything else is detail.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Net-New Items for the Plan</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:0.85em">
+    <tr style="background:#f1f5f9"><th style="text-align:left;padding:8px">Item</th><th style="text-align:left;padding:8px">Phase</th><th style="text-align:center;padding:8px">Priority</th></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Safe area insets (<code>env(safe-area-inset-*)</code>) on BottomNav + header</td><td style="padding:7px 8px">5b</td><td style="padding:7px 8px;text-align:center;color:#dc2626">Critical</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px"><code>viewport-fit=cover</code> added to viewport meta tag</td><td style="padding:7px 8px">5b</td><td style="padding:7px 8px;text-align:center;color:#dc2626">Critical</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px"><code>inputmode="decimal"</code> on all monetary + percentage inputs</td><td style="padding:7px 8px">5b</td><td style="padding:7px 8px;text-align:center;color:#dc2626">Critical</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Empty states on all tabs (CTA, not blank screen)</td><td style="padding:7px 8px">5b</td><td style="padding:7px 8px;text-align:center;color:#dc2626">Critical</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Hero metric: debt-free date prominent above fold on Plan tab</td><td style="padding:7px 8px">5b</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Skeleton loading states (animate-pulse) for plan + AI responses</td><td style="padding:7px 8px">5b</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Prompt regression: capture golden outputs NOW, gate Phase 4 on quality</td><td style="padding:7px 8px">4</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Merge Phase 5 + 5b into single phase</td><td style="padding:7px 8px">Plan</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Move Phase 8 (prompt regression review) into Phase 4 as a gate</td><td style="padding:7px 8px">Plan</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Complete env var inventory added to <code>.env.example</code> and Phase 7</td><td style="padding:7px 8px">7</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Currency: <code>Intl.NumberFormat</code> everywhere, no manual string formatting</td><td style="padding:7px 8px">5b</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Release checklist: definition of done before sharing URL with brother</td><td style="padding:7px 8px">Plan</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="background:#fafafa"><td style="padding:7px 8px">Manual release check: safe area on physical iPhone</td><td style="padding:7px 8px">Release checklist</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <div style="background:#f0fdf4;border-radius:8px;padding:14px;border:1px solid #bbf7d0;font-size:0.88em">
+    <strong style="color:#15803d">Panel consensus after 6 rounds:</strong> The plan is comprehensive. After this round's additions (safe area insets, inputmode, empty states, hero metric, prompt regression gate, phase merge), it is ready for implementation. No further review rounds are needed — the remaining gaps are execution details, not design gaps.
+  </div>
+</div>

@@ -1,0 +1,94 @@
+<h2>Where should the Financial Advisor chat live?</h2>
+<p class="subtitle">This shapes everything — how you access it, how much screen space it gets, and whether it has context from what you're looking at</p>
+
+<div class="cards">
+
+  <div class="card" data-choice="a" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;min-height:140px;display:flex;gap:8px;">
+      <div style="width:52px;background:#1e293b;border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;gap:6px;">
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#0d9488;border-radius:3px;margin-top:4px;"></div>
+      </div>
+      <div style="flex:1;background:#1e293b;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;">
+        <div style="height:10px;background:#334155;border-radius:3px;width:60%;"></div>
+        <div style="flex:1;background:#0f172a;border-radius:4px;padding:8px;display:flex;flex-direction:column;gap:5px;">
+          <div style="background:#1e3a5f;border-radius:8px;padding:5px 8px;font-size:10px;color:#93c5fd;max-width:80%;">Where should I put my £1,300?</div>
+          <div style="background:#134e4a;border-radius:8px;padding:5px 8px;font-size:10px;color:#99f6e4;max-width:85%;align-self:flex-end;">Based on your debts, apply it to your Barclaycard first — it's costing you 29.9% APR...</div>
+          <div style="background:#1e3a5f;border-radius:8px;padding:5px 8px;font-size:10px;color:#93c5fd;max-width:80%;">What if I got a 0% balance transfer?</div>
+        </div>
+        <div style="height:24px;background:#1e293b;border-radius:4px;border:1px solid #334155;"></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Dedicated "Advisor" page</h3>
+      <p>A new view in the sidebar. Full-screen chat with your financial data always available to Claude. Clean and focused.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="b" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;min-height:140px;display:flex;gap:8px;position:relative;">
+      <div style="width:52px;background:#1e293b;border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;gap:6px;">
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#0d9488;border-radius:3px;"></div>
+      </div>
+      <div style="flex:1;background:#1e293b;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;">
+        <div style="height:10px;background:#334155;border-radius:3px;width:60%;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;width:80%;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;width:70%;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;width:75%;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;width:65%;"></div>
+      </div>
+      <!-- Floating chat panel -->
+      <div style="position:absolute;bottom:8px;right:8px;width:110px;background:#1e293b;border-radius:8px;border:1px solid #0d9488;padding:6px;box-shadow:0 4px 12px rgba(0,0,0,0.5);">
+        <div style="font-size:9px;color:#94a3b8;margin-bottom:4px;display:flex;justify-content:space-between;"><span>Advisor</span><span style="color:#0d9488;">●</span></div>
+        <div style="font-size:9px;color:#99f6e4;background:#134e4a;border-radius:4px;padding:3px 5px;margin-bottom:3px;">Best use for £1,300?</div>
+        <div style="font-size:9px;color:#94a3b8;background:#0f172a;border-radius:4px;padding:3px 5px;margin-bottom:4px;">Apply to your highest-APR debt...</div>
+        <div style="height:14px;background:#0f172a;border-radius:3px;border:1px solid #334155;"></div>
+      </div>
+      <!-- Trigger button -->
+      <div style="position:absolute;bottom:8px;left:68px;width:22px;height:22px;background:#0d9488;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;">💬</div>
+    </div>
+    <div class="card-body">
+      <h3>B — Floating chat panel</h3>
+      <p>A bubble in the corner of every page. Slides open without leaving your current view. Aware of the page you're on.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="c" onclick="toggleSelect(this)">
+    <div class="card-image" style="background:#0f172a;border-radius:8px;padding:12px;font-family:monospace;font-size:11px;min-height:140px;display:flex;gap:8px;">
+      <div style="width:52px;background:#1e293b;border-radius:6px;padding:8px 4px;display:flex;flex-direction:column;gap:6px;">
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#0d9488;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+        <div style="height:8px;background:#334155;border-radius:3px;"></div>
+      </div>
+      <div style="flex:1;background:#1e293b;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:5px;">
+        <div style="height:10px;background:#334155;border-radius:3px;width:60%;"></div>
+        <!-- Plan content above -->
+        <div style="display:flex;gap:4px;margin-bottom:2px;">
+          <div style="flex:1;height:28px;background:#0f172a;border-radius:4px;border:1px solid #334155;"></div>
+          <div style="flex:1;height:28px;background:#0f172a;border-radius:4px;border:1px solid #334155;"></div>
+        </div>
+        <!-- Embedded chat below -->
+        <div style="background:#0f172a;border-radius:4px;border:1px solid #0d9488;padding:6px;flex:1;">
+          <div style="font-size:9px;color:#0d9488;margin-bottom:3px;">Ask your advisor</div>
+          <div style="font-size:9px;color:#93c5fd;background:#1e3a5f;border-radius:3px;padding:2px 5px;margin-bottom:2px;max-width:75%;">What if I cleared my overdraft first?</div>
+          <div style="font-size:9px;color:#99f6e4;background:#134e4a;border-radius:3px;padding:2px 5px;max-width:85%;margin-left:auto;">That'd save you £140 less than avalanche, but you'd have one fewer debt by month 3...</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Embedded in the Plan page</h3>
+      <p>A chat section built into the Plan view. Naturally sits alongside your payoff plan. No navigation needed.</p>
+    </div>
+  </div>
+
+</div>

@@ -68,6 +68,9 @@ router.post('/', (req, res) => {
     return lastInsertRowid;
   })();
 
+  // Invalidate plan cache — new debt changes the calculation inputs
+  db.prepare('DELETE FROM plan_cache').run();
+
   const debt = db.prepare('SELECT * FROM debts WHERE id = ?').get(result);
   const debtTranches = db.prepare('SELECT * FROM tranches WHERE debt_id = ? ORDER BY sort_order').all(result);
   res.status(201).json({ debt, tranches: debtTranches });

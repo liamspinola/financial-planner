@@ -1,0 +1,137 @@
+<h2>Data Anonymisation & Protection</h2>
+<p class="subtitle">Financial data is sensitive PII. Here is every layer that needs to be addressed.</p>
+
+<div class="section">
+  <div style="background:#fef2f2;border-left:4px solid #ef4444;border-radius:8px;padding:14px;margin-bottom:16px;font-size:0.88em">
+    <strong style="color:#dc2626">Important distinction:</strong> True anonymisation makes data impossible to re-identify — it falls outside GDPR entirely. Pseudonymisation replaces identifiers with tokens but the data is still personal. Encryption protects data from third parties but the app itself can still read it. A financial planning app cannot fully anonymise its data and remain useful. What you can do is <strong>minimise, pseudonymise, protect, and isolate</strong> at every layer.
+  </div>
+</div>
+
+<div class="section">
+  <h3>Layer 1 — What Data You Actually Collect (Minimise First)</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:0.88em">
+    <div style="background:#f0fdf4;border-radius:8px;padding:14px;border:1px solid #bbf7d0">
+      <strong style="color:#15803d">Necessary — collect this</strong>
+      <ul style="margin:8px 0 0;padding-left:18px;line-height:1.8;color:#374151">
+        <li>Debt amounts, interest rates, minimum payments</li>
+        <li>Income figures (to calculate budget)</li>
+        <li>Monthly expense categories and amounts</li>
+        <li>Windfall / lump sum events</li>
+        <li>Chosen payoff strategy</li>
+        <li>Auth identity (email via Supabase — required)</li>
+      </ul>
+    </div>
+    <div style="background:#fef2f2;border-radius:8px;padding:14px;border:1px solid #fecaca">
+      <strong style="color:#dc2626">Do NOT collect — remove from scope</strong>
+      <ul style="margin:8px 0 0;padding-left:18px;line-height:1.8;color:#374151">
+        <li>Bank names or account numbers</li>
+        <li>Credit card numbers or sort codes</li>
+        <li>Real name (auth gives you email — enough)</li>
+        <li>Date of birth</li>
+        <li>Precise location</li>
+        <li>Device fingerprint or IP address (beyond rate limiting)</li>
+        <li>Anything not directly needed for the calculation</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Layer 2 — Database (Neon)</h3>
+  <div style="font-size:0.88em;line-height:1.7">
+    <p><strong>Neon encrypts at rest by default (AES-256)</strong> — this protects against someone stealing the physical disk. It does not protect against a compromised database connection or a misconfigured query that leaks another user's data. The real protection here comes from your application layer.</p>
+
+    <p><strong>What to add on top:</strong></p>
+    <ul style="padding-left:20px">
+      <li><strong>Never store real names.</strong> The auth user_id (a UUID) is your identifier. Display names can be set by the user but store them separately and never join them into financial queries.</li>
+      <li><strong>Separate PII from financial data.</strong> Keep a <code>user_profiles</code> table (display name, preferences) entirely separate from <code>debts</code>, <code>income_sources</code>, <code>expenses</code>. If the financial tables are ever exposed, they contain amounts and categories — not names tied to those amounts.</li>
+      <li><strong>Debt labels are user-controlled — don't over-read them.</strong> A user might name a debt "Barclays credit card." That's their choice. You don't need to validate or store institution names separately — whatever they type is what gets stored.</li>
+    </ul>
+
+    <table style="width:100%;border-collapse:collapse;margin-top:12px">
+      <tr style="background:#f1f5f9"><th style="text-align:left;padding:7px 8px;font-size:0.9em">Table</th><th style="text-align:left;padding:7px 8px;font-size:0.9em">Contains PII?</th><th style="text-align:left;padding:7px 8px;font-size:0.9em">Risk level</th><th style="text-align:left;padding:7px 8px;font-size:0.9em">Mitigation</th></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 8px;font-size:0.85em">user_profiles</td><td style="padding:6px 8px;font-size:0.85em">Display name (optional)</td><td style="padding:6px 8px;font-size:0.85em;color:#ea580c">Low</td><td style="padding:6px 8px;font-size:0.85em">Keep separate from financial tables</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:6px 8px;font-size:0.85em">debts / tranches</td><td style="padding:6px 8px;font-size:0.85em">Amounts + user-defined labels</td><td style="padding:6px 8px;font-size:0.85em;color:#dc2626">High</td><td style="padding:6px 8px;font-size:0.85em">user_id FK + parameterized queries only</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 8px;font-size:0.85em">income_sources</td><td style="padding:6px 8px;font-size:0.85em">Income amounts</td><td style="padding:6px 8px;font-size:0.85em;color:#dc2626">High</td><td style="padding:6px 8px;font-size:0.85em">user_id FK, never logged</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:6px 8px;font-size:0.85em">messages / conversations</td><td style="padding:6px 8px;font-size:0.85em">AI chat — full financial context</td><td style="padding:6px 8px;font-size:0.85em;color:#dc2626">Very High</td><td style="padding:6px 8px;font-size:0.85em">90-day retention limit, user can delete</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:6px 8px;font-size:0.85em">user_ai_keys</td><td style="padding:6px 8px;font-size:0.85em">Encrypted API keys</td><td style="padding:6px 8px;font-size:0.85em;color:#dc2626">Very High</td><td style="padding:6px 8px;font-size:0.85em">AES-256-GCM, master key in env only</td></tr>
+      <tr style="background:#fafafa"><td style="padding:6px 8px;font-size:0.85em">plan_cache</td><td style="padding:6px 8px;font-size:0.85em">Calculation results (no raw PII)</td><td style="padding:6px 8px;font-size:0.85em;color:#16a34a">Low</td><td style="padding:6px 8px;font-size:0.85em">Hash-keyed, user_id FK</td></tr>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Layer 3 — AI Providers (Biggest Risk)</h3>
+  <div style="background:#fff7ed;border-radius:8px;padding:16px;border:1px solid #fed7aa;font-size:0.88em;line-height:1.7">
+    <p><strong>This is the hardest part.</strong> When you send your brother's debt figures to Gemini or Anthropic, that data leaves your infrastructure and enters Google's / Anthropic's. You cannot control what happens to it there — only what you agree to contractually.</p>
+
+    <p><strong>What to do:</strong></p>
+    <ul style="padding-left:20px">
+      <li><strong>Use the API, not the consumer product.</strong> Google's AI Studio API (what Gemini Flash uses) processes data under their API terms, which include data protection commitments and explicit statements that API data is not used to train models. This is different from using Gemini.google.com directly.</li>
+      <li><strong>Strip identity before sending.</strong> The AI prompt should never contain the user's email address or display name. Send financial figures and categories only. Instead of "John Smith earns £3,200/month," send "The user earns £3,200/month."</li>
+      <li><strong>Minimum necessary data in prompts.</strong> Don't send the full financial picture for every question. If the user asks about one debt, send only that debt's details — not all debts, not income, not the full history.</li>
+      <li><strong>Disclose this to users explicitly.</strong> Your privacy policy must state: "When you use AI features, your financial data (excluding your name and email) is sent to [Google / Anthropic] for processing. This data is not used to train their models." Users must consent to this before they can use AI features.</li>
+      <li><strong>Make AI features opt-in.</strong> The app should function fully without AI. Users who don't want their data leaving your infrastructure can still use the debt calculator, amortisation, and strategy tools. AI is an enhancement, not a requirement.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Layer 4 — Logging & Error Monitoring</h3>
+  <div style="font-size:0.88em;line-height:1.7">
+    <p><strong>Sentry and server logs must never contain financial data.</strong> Configure explicit scrubbing rules:</p>
+    <ul style="padding-left:20px">
+      <li>Sentry: use <code>beforeSend</code> hook to strip any event containing financial field names (<code>amount</code>, <code>balance</code>, <code>income</code>, <code>debt</code>)</li>
+      <li>Server logs: log route names and status codes — never request bodies</li>
+      <li>Vercel function logs: set log level to WARN+ in production — info-level logs often contain too much</li>
+    </ul>
+    <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">// Sentry configuration
+Sentry.init({
+  beforeSend(event) {
+    // Strip any extra context that might contain financial data
+    delete event.extra;
+    delete event.request?.data;
+    return event;
+  }
+});</pre>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Layer 5 — User Controls (GDPR Rights)</h3>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:0.85em">
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+      <strong>Right to access</strong><br>
+      <span style="color:#64748b">User can export all their data as JSON. One button in Settings.</span>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+      <strong>Right to erasure</strong><br>
+      <span style="color:#64748b">Delete account cascades all tables. Immediate. No "we'll process in 30 days."</span>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+      <strong>Right to rectification</strong><br>
+      <span style="color:#64748b">Users can edit all their data (already works by design).</span>
+    </div>
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;border:1px solid #e2e8f0">
+      <strong>AI conversation deletion</strong><br>
+      <span style="color:#64748b">Users can clear their AI chat history independently of their account. Separate control.</span>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Summary — Protection at Every Layer</h3>
+  <div style="font-size:0.85em">
+    <table style="width:100%;border-collapse:collapse">
+      <tr style="background:#1e293b;color:#f1f5f9"><th style="padding:8px;text-align:left">Layer</th><th style="padding:8px;text-align:left">Protection</th><th style="padding:8px;text-align:center">Status</th></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">In transit</td><td style="padding:7px 8px">HTTPS everywhere (Vercel + Neon enforce this)</td><td style="padding:7px 8px;text-align:center;color:#16a34a">✅ Free</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">At rest</td><td style="padding:7px 8px">Neon AES-256 default encryption</td><td style="padding:7px 8px;text-align:center;color:#16a34a">✅ Free</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">App layer</td><td style="padding:7px 8px">user_id isolation on every query, Zod validation, helmet</td><td style="padding:7px 8px;text-align:center;color:#ea580c">⚠️ Build</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">AI prompts</td><td style="padding:7px 8px">Strip identity, minimum data, opt-in consent</td><td style="padding:7px 8px;text-align:center;color:#ea580c">⚠️ Build</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Logs</td><td style="padding:7px 8px">Sentry beforeSend scrubbing, no request body logging</td><td style="padding:7px 8px;text-align:center;color:#ea580c">⚠️ Build</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">BYOK keys</td><td style="padding:7px 8px">AES-256-GCM, IV per key, master key in env</td><td style="padding:7px 8px;text-align:center;color:#ea580c">⚠️ Build</td></tr>
+      <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">User rights</td><td style="padding:7px 8px">Export, delete account, clear AI history — self-service</td><td style="padding:7px 8px;text-align:center;color:#ea580c">⚠️ Build</td></tr>
+      <tr style="background:#fafafa"><td style="padding:7px 8px">Legal</td><td style="padding:7px 8px">Privacy policy with AI disclosure, FCA disclaimer</td><td style="padding:7px 8px;text-align:center;color:#ea580c">⚠️ Build</td></tr>
+    </table>
+  </div>
+</div>

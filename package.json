@@ -1,14 +1,22 @@
 {
-  "name": "financial-planner",
+  "name": "liams-wicked-financial-planner-tool",
   "version": "1.0.0",
   "private": true,
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run client\" --names \"api,ui\" --prefix-colors \"cyan,magenta\"",
     "server": "npm start --prefix server",
     "client": "npm run dev --prefix client",
-    "install:all": "npm install && npm install --prefix client && npm install --prefix server"
+    "install:all": "npm install && npm install --prefix client && npm install --prefix server",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:spec": "playwright test --grep",
+    "test:unit": "npm test --prefix server",
+    "test:all": "npm run test:unit && npm run test:e2e"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "concurrently": "^8.2.2"
   }
 }

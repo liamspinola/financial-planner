@@ -1,0 +1,143 @@
+<h2>Expert Panel Review — Round 3</h2>
+<p class="subtitle">Previous rounds covered stack, security fundamentals, and GDPR. This round goes deeper on deployment, operations, and what's still missing.</p>
+
+<div class="section">
+  <div style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:20px;font-size:0.88em">
+    <strong>Status after Round 2:</strong> Stack is confirmed (Vercel + Neon + Supabase Auth + Gemini + BYOK). Security checklist is defined. GDPR gaps identified. What follows are the gaps that <em>still</em> haven't been addressed — this panel was asked to look harder.
+  </div>
+</div>
+
+<div class="section">
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e293b;color:#f1f5f9;padding:12px 16px;font-weight:bold">👔 CTO — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: No deployment pipeline, no staging environment, no free-tier limit monitoring. These will cause avoidable incidents.</strong></p>
+
+      <p><strong>No staging environment:</strong> You are planning to deploy directly to production. That means every change your brother sees immediately — including broken ones. At minimum, set up a Vercel preview environment (it's free and automatic on every PR) and a separate Neon database branch for staging. Neon's branching feature was built for exactly this — spin up a copy of prod schema for testing, throw it away after. Before a change reaches your brother, it should pass through preview first.</p>
+
+      <p><strong>Free tier cliff monitoring:</strong> You're running on five free tiers simultaneously. Any one of them can hit a limit silently — Gemini daily quota, Neon storage, Supabase Auth MAU, Vercel function invocations. None of them will email you before throttling you. Set up UptimeRobot (free) to ping a health endpoint every 5 minutes. Build a <code>GET /api/health</code> route that checks DB connectivity and returns a status. When your brother can't open the app, you want to know before he tells you.</p>
+
+      <p><strong>Rollback strategy:</strong> Vercel makes code rollback trivial (one click). Database migrations do not roll back trivially. If you push a breaking schema change, you need a plan. Use Drizzle for migrations — it generates up/down migration files. Test migrations on a Neon branch before running on production. Never run a destructive migration (DROP COLUMN, DROP TABLE) without a backup snapshot first.</p>
+
+      <p><strong>Update path as you grow:</strong> The first pressure point will be Neon storage (0.5GB free). A financial planner with active users generating AI conversation history will hit this faster than you expect. Know the upgrade path: Neon's paid tier is $19/mo. Plan for it. Don't be surprised by it.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e3a5f;color:#f1f5f9;padding:12px 16px;font-weight:bold">⚙️ Senior Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Three things not yet addressed that will cause real bugs in production.</strong></p>
+
+      <p><strong>1. PWA service worker stale cache problem:</strong> When you deploy a new version, users on mobile with the PWA installed will often keep serving the old cached version for hours or days. The service worker needs an explicit update strategy — either prompt the user ("A new version is available — tap to update") or use <code>skipWaiting</code> with care. Without this, your brother could be running a version weeks behind production and you'll both be confused why his bugs don't reproduce for you.</p>
+
+      <p><strong>2. API versioning from day one:</strong> Prefix all routes with <code>/api/v1/</code> now. Once the PWA is installed on your brother's phone, there's a cached app that will keep calling the old API routes even after you refactor them. Without versioning, you can't change a route without breaking his installed app. This is trivially cheap to add now and extremely painful to retrofit later.</p>
+
+      <p><strong>3. TypeScript — make the call now:</strong> The codebase is JavaScript. For a personal project, that's fine. For a product with multiple users and an evolving schema, missing types cause the class of bugs that are hardest to find — wrong shape data reaching the DB, AI provider returning unexpected structure, route handler silently ignoring a field. If you're going to migrate to TypeScript, do it before the multi-user rewrite, not after. Doing it afterwards means migrating a moving target. This is a now-or-never decision.</p>
+
+      <p><strong>Also — environment variable management:</strong> You'll have three sets of env vars: local dev, Vercel preview, Vercel production. Document which vars are needed and their format in a <code>.env.example</code> file. Currently it exists but is incomplete for the new stack. Update it as part of the migration. A new contributor (including future-you) should be able to get the app running locally by following the README alone.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#14532d;color:#f1f5f9;padding:12px 16px;font-weight:bold">🏗️ Senior Solutions Architect — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Streaming architecture is underspecified — SSE is the right choice but it needs explicit design.</strong></p>
+
+      <p><strong>SSE not WebSockets for AI streaming:</strong> Vercel's hobby plan does not support WebSockets on serverless functions. For streaming AI responses (which you must implement to avoid the 10s timeout), use Server-Sent Events (SSE). The pattern:</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">// Server: stream Gemini tokens via SSE
+res.setHeader('Content-Type', 'text/event-stream');
+res.setHeader('Cache-Control', 'no-cache');
+for await (const chunk of geminiStream) {
+  res.write(`data: ${JSON.stringify({ token: chunk.text })}\n\n`);
+}
+res.write('data: [DONE]\n\n');
+res.end();</pre>
+      <p>Both Gemini SDK and Anthropic SDK support async iteration over streamed responses. The existing typewriter effect in the frontend already handles incremental rendering — you're wiring it to a different data source, not redesigning the UX.</p>
+
+      <p><strong>AI conversation history migration:</strong> The existing schema has <code>messages</code> and <code>conversations</code> tables for AI chat history. These need user_id added and must be migrated carefully — they may contain sensitive AI responses referencing financial details. Don't truncate them during migration; migrate them with the owning user_id correctly assigned.</p>
+
+      <p><strong>System prompt must never leave the server:</strong> AI system prompts contain your instructions to the model, potentially including context about how the app works. They must be defined in server-side code only — never referenced in client-side bundles. A user inspecting their browser's network tab should see only the user-turn messages, not system prompt contents.</p>
+
+      <p><strong>Model version pinning:</strong> Pin to <code>gemini-2.0-flash-001</code> not <code>gemini-2.0-flash</code>. Google rotates what "latest" points to without notice. A model update can change response style, format, or behaviour overnight. Pin to a specific version, test before upgrading, upgrade deliberately.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#4c1d95;color:#f1f5f9;padding:12px 16px;font-weight:bold">🤖 Senior AI Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Context window management and conversation persistence need explicit design.</strong></p>
+
+      <p><strong>Context window budgeting:</strong> The current app builds AI prompts from the user's full financial picture — all debts, all tranches, income, expenses, strategy results. For a user with many debts and a long conversation history, this can grow large. Gemini 2.0 Flash has a 1M token context window so you won't hit a hard limit, but large prompts mean slower responses and higher latency. Design the prompt construction to include only what's necessary for the current question — not the full history every time.</p>
+
+      <p><strong>Conversation history strategy:</strong> The existing app stores the full AI conversation. In a multi-user hosted app, conversation history per user can grow quickly and become the dominant storage cost. Define a retention policy: keep last N messages per conversation, or keep conversations for 90 days. This is both a cost and a GDPR consideration — data you don't store can't be breached.</p>
+
+      <p><strong>BYOK usage transparency:</strong> When a user supplies their own Anthropic API key, they're paying per token. Show them something — even a rough token count or a "this analysis used approximately X tokens" message. It builds trust and prevents surprise bills. Anthropic's SDK returns usage metadata on every response; surface it.</p>
+
+      <p><strong>Gemini safety configuration:</strong> Set safety thresholds explicitly in the Gemini SDK call. Don't rely on defaults — defaults can change. For a financial app, configure <code>HARM_CATEGORY_HARASSMENT</code>, <code>HARM_CATEGORY_HATE_SPEECH</code> to BLOCK_ONLY_HIGH. Financial content (discussing debt, stress, hardship) can trigger overly cautious defaults at MEDIUM threshold. Test this with realistic financial scenarios before shipping.</p>
+
+      <p><strong>Provider fallback policy:</strong> Be explicit: if Gemini fails (quota exceeded, API error), the app shows a clear error message. It does NOT silently fall back to Claude or another provider without the user knowing. Transparent failure is better than unexpected behaviour — especially when one option costs the user money.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#7c2d12;color:#f1f5f9;padding:12px 16px;font-weight:bold">🧪 Senior QA Automation Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Test strategy for the new hosted architecture is not yet defined. Three gaps.</strong></p>
+
+      <p><strong>Gap 1 — Migration testing:</strong> The SQLite-to-PostgreSQL migration is the highest-risk single operation in this entire project. You need a migration test harness: seed SQLite with realistic data, run the migration script, verify row counts match, verify calculated outputs (amortisation totals, strategy results) are identical before and after. This is a one-time test but it must exist and it must pass before you switch over.</p>
+
+      <p><strong>Gap 2 — Offline behaviour is undefined and untested:</strong> The PWA will be cached on your brother's phone. When he opens it without internet, what happens? Currently: unknown. Define it and test it. At minimum, cached pages should render a clear "You're offline — data will load when you reconnect" state rather than blank screens or cryptic errors. Service worker tests in Playwright can simulate offline mode via <code>page.context().setOffline(true)</code>.</p>
+
+      <p><strong>Gap 3 — PWA Lighthouse audit:</strong> Run a Lighthouse audit (built into Chrome DevTools) before shipping. Vercel preview deployments can be audited directly. A PWA that scores below 90 on Performance and below 100 on PWA compliance will have install prompt issues on some Android browsers. Fix the audit failures before your brother tries to install it — you won't be there to debug it with him.</p>
+
+      <p><strong>Also — E2E tests need a reset mechanism:</strong> Each E2E test run should start from a clean database state. With Neon branching, spin up a fresh branch per CI run and tear it down after. This prevents test pollution between runs and makes tests fully deterministic regardless of order.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#134e4a;color:#f1f5f9;padding:12px 16px;font-weight:bold">📋 Senior Product Manager — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: App identity, offline story, and feedback loop are all missing. Your brother needs more than a working app — he needs a polished experience.</strong></p>
+
+      <p><strong>PWA identity — app name, icon, splash screen:</strong> When your brother adds this to his home screen, what icon does he see? What name? A generic browser icon with "localhost" is not acceptable. The PWA manifest needs: a proper app name ("Debt Planner" or whatever you settle on), a 512×512 icon (and smaller sizes), a theme colour, a background colour for the splash screen. This takes an hour and is the difference between feeling like an app and feeling like a website.</p>
+
+      <p><strong>Feedback mechanism:</strong> Your brother finds a bug or doesn't understand something. How does he tell you? "Text me" is fine for now — but add a simple in-app feedback button that opens a pre-filled email to you. One tap. Non-technical users won't file GitHub issues. Lower the friction to zero or you won't hear about problems until they've frustrated him into abandoning the app.</p>
+
+      <p><strong>Offline state design:</strong> The app is not functional offline (it needs the server for all data). That's fine — but design the offline state explicitly. When there's no connectivity, show a friendly message with the last time data was synced, rather than letting the app appear broken. Non-technical users interpret a blank screen as "the app is broken," not "I'm offline."</p>
+
+      <p><strong>Onboarding still not designed:</strong> This was flagged in Round 2 and remains unaddressed. Your brother's first session will determine whether he ever comes back. He needs a guided setup: (1) welcome screen explaining what the app does, (2) add your first debt — with examples of what to enter, (3) see your payoff plan. Without this, he opens a blank dashboard and has no idea where to start. This is arguably the most important thing to build before you share the link with him.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Net-New Issues This Round</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:0.85em">
+    <tr style="background:#f1f5f9"><th style="text-align:left;padding:8px">Issue</th><th style="text-align:left;padding:8px">Raised by</th><th style="text-align:center;padding:8px">Priority</th></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">No staging environment / Neon branching strategy</td><td style="padding:7px 8px">CTO + QA</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Free tier cliff monitoring (UptimeRobot + /api/health)</td><td style="padding:7px 8px">CTO</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">PWA service worker update strategy (stale cache)</td><td style="padding:7px 8px">SE + PM</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">API versioning (/api/v1/) before any deploy</td><td style="padding:7px 8px">SE</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">SSE (not WebSocket) for AI streaming on Vercel hobby</td><td style="padding:7px 8px">Architect</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">System prompt must stay server-side only</td><td style="padding:7px 8px">Architect</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Pin Gemini to specific version (not "latest")</td><td style="padding:7px 8px">Architect + AI SE</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Migration testing harness (SQLite → Postgres)</td><td style="padding:7px 8px">QA</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Onboarding wizard (still unbuilt)</td><td style="padding:7px 8px">PM</td><td style="padding:7px 8px;text-align:center;color:#dc2626">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">TypeScript migration — decide now or never</td><td style="padding:7px 8px">SE</td><td style="padding:7px 8px;text-align:center;color:#ea580c">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Gemini safety settings need explicit configuration</td><td style="padding:7px 8px">AI SE</td><td style="padding:7px 8px;text-align:center;color:#ea580c">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">AI conversation history retention policy (storage + GDPR)</td><td style="padding:7px 8px">AI SE + Architect</td><td style="padding:7px 8px;text-align:center;color:#ea580c">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">BYOK token usage shown to user</td><td style="padding:7px 8px">AI SE</td><td style="padding:7px 8px;text-align:center;color:#ea580c">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Offline state UX (friendly message, not blank screen)</td><td style="padding:7px 8px">PM + QA</td><td style="padding:7px 8px;text-align:center;color:#ea580c">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">PWA identity — name, icon, splash screen</td><td style="padding:7px 8px">PM</td><td style="padding:7px 8px;text-align:center;color:#ea580c">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Lighthouse PWA audit before shipping</td><td style="padding:7px 8px">QA</td><td style="padding:7px 8px;text-align:center;color:#ea580c">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Neon storage growth — AI history is the pressure point</td><td style="padding:7px 8px">CTO</td><td style="padding:7px 8px;text-align:center;color:#ca8a04">Low</td></tr>
+    <tr style="background:#fafafa"><td style="padding:7px 8px">In-app feedback button (pre-filled email)</td><td style="padding:7px 8px">PM</td><td style="padding:7px 8px;text-align:center;color:#ca8a04">Low</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <div style="background:#f0fdf4;border-radius:8px;padding:16px;border:1px solid #bbf7d0">
+    <strong style="color:#15803d">Panel consensus after three rounds:</strong>
+    <p style="margin:8px 0 0;font-size:0.9em;color:#374151">The architecture is solid. The security checklist from Round 2 is comprehensive. The remaining gaps are operational (staging, monitoring, service worker), UX (onboarding, offline state, PWA identity), and one technical decision that can't be deferred (TypeScript yes/no). None of these are blockers for starting implementation — but onboarding and the service worker update strategy should be scoped into the first release, not deferred.</p>
+  </div>
+</div>

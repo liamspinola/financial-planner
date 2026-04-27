@@ -1,0 +1,114 @@
+<h2>Expert Panel Review — Round 7</h2>
+<p class="subtitle">Final spec review. Reviewing the written document for gaps, contradictions, and missing detail.</p>
+
+<div class="section">
+  <div style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:16px;font-size:0.88em">
+    <strong>Reviewing:</strong> <code>docs/superpowers/specs/2026-04-19-multi-user-cloud-migration.md</code> — the committed spec document. Panel is reading the actual written spec, not recalling prior discussion.
+  </div>
+</div>
+
+<div class="section">
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e293b;color:#f1f5f9;padding:12px 16px;font-weight:bold">👔 CTO — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Spec is solid and complete. Two gaps to close before implementation starts.</strong></p>
+
+      <p><strong>Gap 1 — No rollback strategy for database migrations.</strong> The spec says "Drizzle generates up + down migration files" in the architecture section but never mentions how a failed migration is recovered from. Production migrations are the single highest-risk operation in this entire plan. The spec should state explicitly: (a) take a Neon point-in-time snapshot before running any production migration, (b) test the down migration on a Neon branch before touching production, (c) never run a destructive migration (DROP COLUMN/TABLE) without a named restore point. One paragraph. Without it, an implementer could run migrations without these safeguards and have no recovery path.</p>
+
+      <p><strong>Gap 2 — No app name.</strong> The PWA section specifies icons, manifest fields, and display modes — but the app has no name in the spec. The manifest.json needs a name. The browser tab needs a title. The home screen icon needs a label. This is a product decision that should be made before implementation, not discovered when someone goes to write the manifest. What is this app called?</p>
+
+      <p><strong>What's good:</strong> The decisions table is crisp and complete. The release checklist is the right gate. The phase breakdown is well-sequenced — each phase has clear dependencies on the previous. The cost table is accurate. This is the most thorough spec I've seen for a side project of this scope.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e3a5f;color:#f1f5f9;padding:12px 16px;font-weight:bold">⚙️ Senior Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Three implementation details missing that will cause ambiguity during coding.</strong></p>
+
+      <p><strong>Detail 1 — How does Vercel serve the Express API?</strong> The spec says "Vercel (frontend + serverless API)" and mentions <code>vercel.json</code> in the files list — but never explains the adapter pattern. Express doesn't run natively as Vercel serverless functions. The implementer needs to know the approach: use <code>@vercel/node</code> with a single <code>api/index.ts</code> catch-all that imports the Express app. Without this, Phase 7 will stall. Add one line: <em>"The Express app is exported as a single Vercel serverless function via <code>api/index.ts</code> using <code>@vercel/node</code>. All routes under <code>/api/v1/</code> are handled by this function."</em></p>
+
+      <p><strong>Detail 2 — Where does the Drizzle schema reference Supabase Auth users?</strong> The spec says every table gets <code>user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE</code>. But Supabase Auth's <code>auth.users</code> table is in a separate schema managed by Supabase — you cannot directly foreign-key to it from application tables in the <code>public</code> schema on Neon (a separate database). The correct approach: Supabase issues a JWT containing the user's UUID; the app trusts and stores that UUID as <code>user_id</code> without a DB-level foreign key constraint. The isolation is enforced at the application layer (middleware + WHERE clauses), not by DB referential integrity. The spec's FK syntax is wrong and will confuse the implementer. Fix the data model section.</p>
+
+      <p><strong>Detail 3 — <code>tsconfig.json</code> module resolution for shared types.</strong> The spec mentions <code>shared/types/</code> but doesn't explain how both <code>client/</code> and <code>server/</code> import from it. With <code>"moduleResolution": "NodeNext"</code> this requires path aliases in each tsconfig. Add a note: <em>"Both <code>client/tsconfig.json</code> and <code>server/tsconfig.json</code> define a path alias <code>@shared/*</code> pointing to <code>../../shared/*</code>. Vite's <code>resolve.alias</code> also needs the same mapping for client builds."</em></p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#14532d;color:#f1f5f9;padding:12px 16px;font-weight:bold">🏗️ Senior Solutions Architect — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: The Neon + Supabase split needs one more sentence of justification, and the connection pooler detail is buried.</strong></p>
+
+      <p><strong>Neon vs Supabase PostgreSQL — clarify why split:</strong> A reader coming fresh to this spec will ask: "Why are we using Neon for the database AND Supabase for auth? Why not use Supabase for both?" The spec doesn't answer this. The reason (Supabase free PostgreSQL pauses after 7 days of inactivity; Neon does not) should appear as a one-liner in the Decisions table or the Data Model section. Without it, the split looks accidental rather than deliberate, and a future implementer might "simplify" it by moving everything to Supabase PostgreSQL and reintroduce the pausing problem.</p>
+
+      <p><strong>Neon pooler connection string — not mentioned in Phase 1.</strong> The spec correctly calls out <code>DATABASE_URL</code> as the "Neon pooler connection string" in the env vars table, but Phase 1 (Database setup) never mentions it. An implementer setting up Neon will be given two connection strings — direct and pooler — and may use the direct one. Add to Phase 1 step 1: <em>"Use the pooler connection string (PgBouncer endpoint), not the direct connection. Vercel serverless functions open a new DB connection per invocation; the direct connection exhausts Postgres connection limits under concurrent load."</em></p>
+
+      <p><strong>What's well-architected:</strong> The <code>FinancialContext</code> type as a compile-time anonymisation contract is genuinely elegant — it's the right use of TypeScript's type system for a non-functional requirement. The SSE pattern is correctly specified. The AI router abstraction is clean and testable. The env var scope column (server only / client / both) is exactly the right level of detail — I've seen production incidents caused by missing that column.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#4c1d95;color:#f1f5f9;padding:12px 16px;font-weight:bold">🤖 Senior AI Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: AI section is well-specified. One gap: the <code>FinancialContext</code> shape is incomplete for the actual prompts.</strong></p>
+
+      <p><strong>FinancialContext is illustrative, not complete.</strong> The spec shows a simplified shape with 5 fields. The actual financial planner has tranches (promotional rates + standard rates), windfall events, expense events, spending actuals, progress snapshots, and strategy comparison results. The prompts that produce good AI narratives need this richer context. The spec should note: <em>"The <code>FinancialContext</code> interface shown is the PII-exclusion contract. The full implementation will include additional fields (tranches, windfalls, expense events, strategy comparison) — all financial figures, none personally identifying."</em> Without this note, an implementer might treat the spec's simplified version as the complete definition and build prompts around it, then discover the output quality suffers because key context is missing.</p>
+
+      <p><strong>Gemini EU endpoint:</strong> The spec says "EU API endpoint" for GeminiProvider but doesn't name it. Google's Gemini API does have regional endpoints (<code>europe-west1-aiplatform.googleapis.com</code>). However, using the regional Vertex AI endpoint requires a Google Cloud project and service account — it's meaningfully more complex than the standard AI Studio API key approach. The simpler alternative: use the standard Gemini API (which routes globally but Google's data processing terms cover GDPR compliance) and note this explicitly so the implementer doesn't spend time on Vertex AI setup unnecessarily. Recommend: use standard AI Studio endpoint, document that Google's API terms provide GDPR-adequate data processing commitments. Add this clarification to the spec.</p>
+
+      <p><strong>Golden outputs directory:</strong> The spec mentions <code>server/ai/prompts/golden-outputs/</code> — good. Add one line: these files should be committed to the repo and not gitignored. They are the regression baseline and need to survive machine changes.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#7c2d12;color:#f1f5f9;padding:12px 16px;font-weight:bold">🧪 Senior QA Automation Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Testing strategy is thorough. Two gaps.</strong></p>
+
+      <p><strong>Gap 1 — No test for the migration harness itself.</strong> The spec says "migration testing harness: seed SQLite → run migration → verify row counts match → verify amortisation totals identical." But who runs this? When? It should be a named npm script (<code>npm run test:migration</code>) that runs as part of the Phase 1 acceptance criteria — not just a manual check. Add to the spec: <em>"Migration harness runs as <code>npm run test:migration</code>. Must pass before Phase 1 is marked complete. Not part of regular CI (runs once, on a real Neon branch)."</em></p>
+
+      <p><strong>Gap 2 — No mention of test data seeding strategy for E2E tests.</strong> Playwright tests that exercise "add debt, run plan, use AI" need a consistent starting state. How is this achieved? Options: (a) each test creates its own data via API calls in <code>beforeEach</code>, (b) a shared seed script populates the test database before the suite runs. The spec should specify which approach. Recommendation: option (a) — test creates its own user + data, no shared state between tests. This makes tests order-independent and parallelisable. Add one sentence to the testing strategy.</p>
+
+      <p><strong>What's correct:</strong> Running Playwright at three viewports simultaneously is the right call. The cross-user isolation test pattern is exactly right (returns 403, not 404 or 200). The rate limit test verifying 429 not 500 is a subtle but important distinction. The migration testing harness concept is the correct approach for a SQLite → Postgres migration.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#134e4a;color:#f1f5f9;padding:12px 16px;font-weight:bold">📋 Senior Product Manager — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: The spec is implementer-ready. One product decision still unmade.</strong></p>
+
+      <p><strong>The app has no name.</strong> Agreeing with the CTO. Before the manifest is written, someone needs to decide: what is this called? "Debt Planner," "ClearDebt," "PayOffPlan," something else? This affects: the PWA manifest name (shown on home screen), the browser tab title, the login page heading, the privacy policy, the app store listing (if it ever goes there). It's a 30-second decision that blocks multiple implementation tasks. Make it now, put it in the spec.</p>
+
+      <p><strong>Privacy policy timing:</strong> The spec says "privacy policy required before any external user" and lists it in the release checklist. Good. But Phase 6 (GDPR) says "write privacy policy (use Termly)." The release checklist gates on "privacy policy live and linked in app footer." What's the URL? Where does it live? Options: a static page at <code>/privacy</code> within the app, or an external URL (Termly hosts it). Specify which — the implementer needs to know where to link from the footer.</p>
+
+      <p><strong>What's well-considered:</strong> The v1 / v2 / v3 scope split is realistic and well-judged. Deferring the onboarding wizard to v2 is correct — empty states in v1 provide enough guidance for a first user. The hero metric (debt-free date above fold) is the right product decision. The AI opt-in consent flow protects both the user and the developer. This spec reflects genuine product thinking, not just engineering decisions.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>Summary — Changes Needed Before Implementation</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:0.85em">
+    <tr style="background:#f1f5f9"><th style="text-align:left;padding:8px">Gap</th><th style="text-align:left;padding:8px">Section to update</th><th style="text-align:center;padding:8px">Blocking?</th></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fef2f2"><td style="padding:7px 8px">App name — required before manifest + login page</td><td style="padding:7px 8px">Decisions table / PWA section</td><td style="padding:7px 8px;text-align:center;color:#dc2626">Yes</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fef2f2"><td style="padding:7px 8px">DB FK syntax wrong — Neon cannot FK to Supabase auth.users</td><td style="padding:7px 8px">Data Model section</td><td style="padding:7px 8px;text-align:center;color:#dc2626">Yes</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fef2f2"><td style="padding:7px 8px">Vercel/Express adapter pattern — <code>api/index.ts</code> with <code>@vercel/node</code></td><td style="padding:7px 8px">Architecture section</td><td style="padding:7px 8px;text-align:center;color:#dc2626">Yes</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Shared types path alias — <code>@shared/*</code> in tsconfig + Vite config</td><td style="padding:7px 8px">Architecture section</td><td style="padding:7px 8px;text-align:center;color:#dc2626">Yes</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Migration rollback strategy — snapshot before, test down migration on branch first</td><td style="padding:7px 8px">Data Model / Phase 1</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Neon pooler connection string — add to Phase 1 setup steps</td><td style="padding:7px 8px">Phase 1</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Why Neon not Supabase PostgreSQL — add one-liner to Decisions or Data Model</td><td style="padding:7px 8px">Data Model section</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">FinancialContext is illustrative — full shape includes tranches, windfalls, etc.</td><td style="padding:7px 8px">AI Provider section</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Gemini standard API endpoint (not Vertex AI) — clarify with GDPR justification</td><td style="padding:7px 8px">AI Provider section</td><td style="padding:7px 8px;text-align:center;color:#ea580c">High</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">Golden outputs directory committed to repo (not gitignored)</td><td style="padding:7px 8px">Architecture section</td><td style="padding:7px 8px;text-align:center;color:#ca8a04">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9;background:#fafafa"><td style="padding:7px 8px">Migration harness as named npm script (<code>npm run test:migration</code>)</td><td style="padding:7px 8px">Testing Strategy / Phase 1</td><td style="padding:7px 8px;text-align:center;color:#ca8a04">Medium</td></tr>
+    <tr style="border-bottom:1px solid #f1f5f9"><td style="padding:7px 8px">E2E test data seeding strategy — each test creates own user+data in beforeEach</td><td style="padding:7px 8px">Testing Strategy</td><td style="padding:7px 8px;text-align:center;color:#ca8a04">Medium</td></tr>
+    <tr style="background:#fafafa"><td style="padding:7px 8px">Privacy policy URL — <code>/privacy</code> route in app or Termly-hosted external URL</td><td style="padding:7px 8px">Phase 6 / Release checklist</td><td style="padding:7px 8px;text-align:center;color:#ca8a04">Medium</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <div style="background:#f0fdf4;border-radius:8px;padding:14px;border:1px solid #bbf7d0;font-size:0.88em">
+    <strong style="color:#15803d">Overall assessment:</strong> This is a high-quality spec. The blocking gaps are fixable in under an hour — the FK issue is a one-sentence correction, the Vercel adapter and path alias are one-liners, and the app name is a product decision. Once those are resolved, the spec is implementation-ready and no further review rounds are needed.
+  </div>
+</div>

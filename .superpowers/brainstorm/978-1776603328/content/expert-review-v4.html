@@ -1,0 +1,175 @@
+<h2>Expert Panel Review — Round 4</h2>
+<p class="subtitle">TypeScript confirmed. Final architectural gaps. Future work catalogue.</p>
+
+<div class="section">
+  <div style="background:#eff6ff;border-left:4px solid #3b82f6;border-radius:8px;padding:14px;margin-bottom:16px;font-size:0.88em">
+    <strong>Decisions locked in after 4 rounds:</strong> Vercel (frontend + API/SSE) · Neon PostgreSQL (EU, no pause) · Supabase Auth (Google + email) · Gemini 2.0 Flash (default AI, pinned version) · BYOK Anthropic (claude-sonnet-4-6) · TypeScript (strict mode) · Drizzle ORM · Sentry · /api/v1/ from day one. Cost: £0/mo.
+  </div>
+</div>
+
+<div class="section">
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e293b;color:#f1f5f9;padding:12px 16px;font-weight:bold">👔 CTO — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: TypeScript is the right call. One structural decision remains: shared types.</strong></p>
+      <p>TypeScript strict mode eliminates an entire class of production bugs before they happen — especially important in a multi-user rewrite where user_id mismatches and wrong-shaped API responses are the most common failure modes. Good decision.</p>
+      <p><strong>Monorepo shared types — decide now:</strong> You have a client (React) and a server (Express). Both will describe the same entities: <code>Debt</code>, <code>IncomeSource</code>, <code>Expense</code>, <code>PlanResult</code>. If you define them twice, they drift. Create a <code>shared/types/</code> directory at the project root, export your domain types and Zod schemas from there, and import in both client and server. This is not a full monorepo — just a shared directory. No extra tooling needed.</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">financial-planner/
+  shared/
+    types/
+      debt.ts       // Debt, Tranche, DebtWithTranches
+      plan.ts       // PlanResult, StrategyComparison
+      ai.ts         // AIMessage, AIProvider
+      api.ts        // API request/response shapes
+  client/src/       // imports from ../../shared/types
+  server/           // imports from ../shared/types</pre>
+      <p><strong>Migration strategy:</strong> Don't migrate the existing JS to TypeScript line-by-line. You're already rewriting for multi-user — write the new code in TypeScript from scratch. The financial engine (pure calculation logic) is the one piece worth migrating carefully since it has no side effects and the types will catch real bugs.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#1e3a5f;color:#f1f5f9;padding:12px 16px;font-weight:bold">⚙️ Senior Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Four TypeScript-specific decisions that need to be explicit in the plan.</strong></p>
+
+      <p><strong>1. tsconfig — strict mode, no compromise:</strong></p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">// tsconfig.json
+{
+  "compilerOptions": {
+    "strict": true,           // enables all strict checks
+    "noUncheckedIndexedAccess": true,  // arr[0] is T | undefined
+    "exactOptionalPropertyTypes": true,
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext"
+  }
+}</pre>
+
+      <p><strong>2. Drizzle ORM is the right choice — here's why:</strong> Drizzle is TypeScript-first, generates types from your schema definition, produces type-safe queries, and generates SQL migration files you can inspect and run manually. Unlike Prisma, it doesn't require a separate binary and works natively in Vercel serverless. The schema definition doubles as your source of truth for both TypeScript types and SQL migrations.</p>
+
+      <p><strong>3. Zod schemas → infer TypeScript types:</strong> Don't write types twice. Define Zod schemas for all API request/response bodies, then use <code>z.infer&lt;typeof schema&gt;</code> for the TypeScript type. One definition, both runtime validation and compile-time types.</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">const CreateDebtSchema = z.object({
+  label: z.string().min(1).max(100),
+  balance: z.number().positive(),
+  interestRate: z.number().min(0).max(100),
+});
+type CreateDebtRequest = z.infer&lt;typeof CreateDebtSchema&gt;;</pre>
+
+      <p><strong>4. Financial arithmetic — use integer pence, not floats:</strong> The existing engine almost certainly uses floating point for monetary values. <code>0.1 + 0.2 !== 0.3</code> in JavaScript. For a financial app, store and calculate all monetary values as integer pence (multiply by 100 on input, divide by 100 on display). TypeScript won't catch this for you — it needs to be an explicit convention enforced by code review and documented in the shared types.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#14532d;color:#f1f5f9;padding:12px 16px;font-weight:bold">🏗️ Senior Solutions Architect — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: TypeScript enables a cleaner AI provider interface. Define it explicitly.</strong></p>
+
+      <p><strong>The AI provider abstraction in TypeScript:</strong></p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">// shared/types/ai.ts
+interface AIProvider {
+  streamAnalysis(
+    context: FinancialContext,  // typed, no raw strings
+    userMessage: string,
+    history: AIMessage[]
+  ): AsyncIterable&lt;string&gt;;    // streams tokens
+  readonly providerName: 'gemini' | 'anthropic';
+}
+
+// server/ai/providers/gemini.ts  — implements AIProvider
+// server/ai/providers/anthropic.ts — implements AIProvider
+// server/ai/providers/mock.ts  — implements AIProvider (tests)</pre>
+      <p>TypeScript enforces that both real providers and the mock implement the same interface. If Gemini's SDK changes, the type error shows up at compile time, not in production.</p>
+
+      <p><strong>FinancialContext type — the anonymisation contract in code:</strong> Define a <code>FinancialContext</code> type that explicitly excludes PII. The type itself documents what is and isn't sent to AI providers:</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">interface FinancialContext {
+  // NOTE: No userId, email, or display name — by design
+  debts: Array&lt;{ label: string; balancePence: number; apr: number }&gt;;
+  monthlyIncomePence: number;
+  monthlyExpensesPence: number;
+  strategy: 'avalanche' | 'snowball';
+  debtFreeDateEstimate: string;
+}</pre>
+      <p>If someone accidentally tries to add <code>email</code> to <code>FinancialContext</code>, the type definition makes it visible in code review. The anonymisation policy is enforced structurally, not just by convention.</p>
+
+      <p><strong>Build pipeline:</strong> Client uses Vite (already configured, just add TypeScript). Server uses <code>tsx</code> for local dev (fast TS execution without compile step) and <code>tsc --noEmit</code> in CI to type-check. Vercel handles the server compilation for deployment automatically.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#4c1d95;color:#f1f5f9;padding:12px 16px;font-weight:bold">🤖 Senior AI Software Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Both SDKs are TypeScript-first. The migration from CLI subprocess is clean.</strong></p>
+      <p>The Anthropic TypeScript SDK (<code>@anthropic-ai/sdk</code>) and Google's Generative AI SDK (<code>@google/generative-ai</code>) are both fully typed. Streaming is idiomatic — both support <code>for await...of</code> over typed chunk objects. No subprocess, no shell escaping, no JSON parsing of CLI output.</p>
+
+      <p><strong>The existing Claude CLI integration is the most dangerous part of the current codebase</strong> from a security standpoint — it spawns a subprocess with user-influenced arguments. TypeScript + SDK replaces this entirely. The new code will be simpler, safer, and testable.</p>
+
+      <p><strong>Prompt template typing:</strong> The prompts that currently exist as strings mixed with template literals should become typed functions:</p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">function buildAnalysisPrompt(ctx: FinancialContext): string {
+  // TypeScript ensures ctx has the right shape
+  // FinancialContext excludes PII by type definition
+  return `Analyse this debt payoff plan: ...`;
+}</pre>
+      <p><strong>One remaining concern — prompt regression testing:</strong> When you migrate from Claude CLI to Gemini SDK, your prompts will produce different output. This isn't a bug — it's expected — but you should review the AI responses manually with realistic test data before releasing to your brother. Keep a set of "golden" financial scenarios and compare output between old and new providers. This is a one-time QA step, not ongoing infrastructure.</p>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#7c2d12;color:#f1f5f9;padding:12px 16px;font-weight:bold">🧪 Senior QA Automation Engineer — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: TypeScript + Zod closes the testing gap on input validation. Three test types to add.</strong></p>
+      <p><strong>TypeScript in tests:</strong> All test files (Jest unit tests + Playwright E2E) should be TypeScript. Typed mocks, typed fixtures, typed assertions. The <code>MockAIProvider</code> implementing the <code>AIProvider</code> interface means TypeScript will tell you when the mock drifts from the real interface.</p>
+
+      <p><strong>Three test categories to add that don't exist yet:</strong></p>
+      <ol style="padding-left:20px;line-height:1.8">
+        <li><strong>Type-level tests (tsd or vitest type tests):</strong> Assert that <code>FinancialContext</code> does not have a <code>userId</code> field. Assert that <code>AIProvider.streamAnalysis</code> returns <code>AsyncIterable&lt;string&gt;</code>. These are compile-time assertions that catch interface regressions.</li>
+        <li><strong>Drizzle migration tests:</strong> Run each migration on a clean Neon branch, verify schema matches expectations, run down migration, verify rollback. Part of CI on every PR that touches <code>drizzle/</code>.</li>
+        <li><strong>Financial calculation precision tests:</strong> The pence convention must be tested explicitly. Add unit tests that verify <code>0.1 + 0.2</code> edge cases don't corrupt amortisation totals over a 5-year simulation.</li>
+      </ol>
+
+      <p><strong>CI pipeline to add:</strong></p>
+      <pre style="background:#f8fafc;padding:10px;border-radius:6px;font-size:0.82em;overflow-x:auto">tsc --noEmit           # type check (fail on type errors)
+npm run lint           # ESLint with TypeScript rules
+npm audit --audit-level=high  # dependency security
+npm test               # Jest unit tests
+npx playwright test    # E2E (against preview deployment)</pre>
+    </div>
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:10px;overflow:hidden;margin-bottom:16px">
+    <div style="background:#134e4a;color:#f1f5f9;padding:12px 16px;font-weight:bold">📋 Senior Product Manager — Decades of Experience</div>
+    <div style="padding:16px;font-size:0.9em;line-height:1.7">
+      <p><strong>Verdict: Scope this right — don't let perfect be the enemy of shipped.</strong></p>
+      <p>Four rounds of expert review have generated a comprehensive list. The risk now is scope creep — trying to ship everything at once and shipping nothing. The right move is to define a clear v1 scope and park everything else with proper tracking.</p>
+
+      <p><strong>What must be in v1 (before your brother can use it):</strong></p>
+      <ul style="padding-left:20px;line-height:1.8">
+        <li>Auth (Google login) + multi-user data isolation</li>
+        <li>Full existing feature set working on hosted stack</li>
+        <li>AI via Gemini (default) + BYOK</li>
+        <li>PWA install + basic offline message</li>
+        <li>Security baseline (helmet, rate limiting, Zod, CORS, AES-256 BYOK keys)</li>
+        <li>Privacy policy + FCA disclaimer + account deletion</li>
+        <li>EU region data residency</li>
+      </ul>
+
+      <p><strong>What can be v2 (after your brother is using it):</strong></p>
+      <ul style="padding-left:20px;line-height:1.8">
+        <li>Onboarding wizard — high priority v2, build based on real feedback</li>
+        <li>iOS home screen install guide</li>
+        <li>In-app feedback button</li>
+        <li>AI conversation history retention + clear history control</li>
+        <li>BYOK token usage display</li>
+        <li>Data export (JSON)</li>
+        <li>PWA push notifications (debt milestones)</li>
+      </ul>
+
+      <p><strong>What is ongoing / operational (not a feature):</strong></p>
+      <ul style="padding-left:20px;line-height:1.8">
+        <li>UptimeRobot monitoring — set up once, runs forever</li>
+        <li>Staging environment (Neon branch + Vercel preview) — set up once</li>
+        <li>Dependabot — enable once in GitHub settings</li>
+        <li>Lighthouse audits — run before each release</li>
+      </ul>
+    </div>
+  </div>
+</div>
