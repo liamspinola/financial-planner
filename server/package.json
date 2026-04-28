@@ -5,7 +5,8 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "test": "jest"
+    "test": "jest --runInBand",
+    "test:api": "jest --runInBand"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +18,19 @@
     "express": "^5.2.1"
   },
   "devDependencies": {
-    "jest": "^29.7.0"
+    "jest": "^29.7.0",
+    "supertest": "^7.2.2"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "setupFiles": [
+      "./tests/helpers/env.js"
+    ],
+    "testMatch": [
+      "**/engine/__tests__/**/*.test.js",
+      "**/tests/**/*.test.js"
+    ],
+    "testTimeout": 10000,
+    "clearMocks": true
   }
 }
