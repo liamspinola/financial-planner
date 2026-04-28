@@ -43,7 +43,8 @@ export const CreateIncomeSourceSchema = z.object({
   label: z.string().min(1).max(200),
   /** Amount in pence */
   amount: z.number().int().min(1),
-  frequency: z.enum(['weekly', 'fortnightly', 'monthly', 'annual']).default('monthly'),
+  /** four_weekly = 13 periods/year (supported by engine) */
+  frequency: z.enum(['weekly', 'fortnightly', 'four_weekly', 'monthly', 'annual']).default('monthly'),
   /** Pre-calculated monthly equivalent in pence */
   monthlyEquivalent: z.number().int().min(1),
 });
@@ -69,6 +70,70 @@ export const CreateWindfallSchema = z.object({
   applyMonth: z.number().int().min(1).max(360),
 });
 export type CreateWindfallRequest = z.infer<typeof CreateWindfallSchema>;
+
+// ── Expense Events ────────────────────────────────────────────────────────
+
+export const CreateExpenseEventSchema = z.object({
+  label: z.string().min(1).max(200),
+  /** Amount in pence */
+  amount: z.number().int().min(1),
+  applyMonth: z.number().int().min(1).max(360),
+  category: z.enum(['expected', 'unexpected']).default('expected'),
+});
+export type CreateExpenseEventRequest = z.infer<typeof CreateExpenseEventSchema>;
+
+// ── Progress Snapshots ────────────────────────────────────────────────────
+
+export const CreateProgressSnapshotSchema = z.object({
+  /** Format: YYYY-MM */
+  snapshotMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Must be YYYY-MM format'),
+  /** Map of debt/tranche id to remaining balance in pence */
+  balances: z.record(z.string(), z.number().int().min(0)),
+  notes: z.string().max(500).nullable().optional(),
+});
+export type CreateProgressSnapshotRequest = z.infer<typeof CreateProgressSnapshotSchema>;
+
+// ── Spending Actuals ──────────────────────────────────────────────────────
+
+export const CreateActualSchema = z.object({
+  expenseId: z.number().int().positive().nullable().optional(),
+  category: z.string().min(1).max(100),
+  label: z.string().min(1).max(200),
+  /** Actual amount spent in pence */
+  amountActual: z.number().int().min(0),
+  /** Format: YYYY-MM */
+  recordMonth: z.string().regex(/^\d{4}-\d{2}$/, 'Must be YYYY-MM format'),
+});
+export type CreateActualRequest = z.infer<typeof CreateActualSchema>;
+
+export const UpdateActualSchema = z.object({
+  amountActual: z.number().int().min(0),
+});
+export type UpdateActualRequest = z.infer<typeof UpdateActualSchema>;
+
+// ── Settings ──────────────────────────────────────────────────────────────
+
+export const PutSettingsSchema = z.record(
+  z.string().min(1),
+  z.union([z.string(), z.number(), z.boolean()]),
+);
+export type PutSettingsRequest = z.infer<typeof PutSettingsSchema>;
+
+// ── Plan what-if / lump-sum ───────────────────────────────────────────────
+
+export const WhatIfSchema = z.object({
+  /** Extra monthly payment in pence */
+  extraMonthly: z.number().int().min(0),
+});
+export type WhatIfRequest = z.infer<typeof WhatIfSchema>;
+
+export const LumpSumSchema = z.object({
+  /** One-off payment amount in pence */
+  amount: z.number().int().min(1),
+  /** Month number (1 = next month) to apply the lump sum */
+  applyMonth: z.number().int().min(1).default(1),
+});
+export type LumpSumRequest = z.infer<typeof LumpSumSchema>;
 
 // ── AI ────────────────────────────────────────────────────────────────────
 
