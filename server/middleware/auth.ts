@@ -13,7 +13,7 @@ const secret: string = jwtSecret;
 declare global {
   namespace Express {
     interface Request {
-      auth: { userId: string };
+      auth?: { userId: string };
     }
   }
 }
@@ -34,12 +34,12 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   const token = authHeader.slice(7);
 
   try {
-    const decoded = jwt.verify(token, secret) as { sub?: string };
-    if (!decoded.sub) {
+    const raw = jwt.verify(token, secret, { algorithms: ['HS256'] });
+    if (typeof raw === 'string' || typeof raw['sub'] !== 'string' || !raw['sub']) {
       res.status(401).json({ error: 'Invalid token: missing sub claim' });
       return;
     }
-    req.auth = { userId: decoded.sub };
+    req.auth = { userId: raw['sub'] };
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });

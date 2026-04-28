@@ -7,6 +7,7 @@ module.exports = {
     '^@shared/(.*)$': '<rootDir>/../shared/$1',
   },
   testMatch: ['**/__tests__/**/*.test.ts'],
+  setupFiles: ['<rootDir>/jest.setup.ts'],
   globals: {
     'ts-jest': {
       tsconfig: '<rootDir>/tsconfig.json',

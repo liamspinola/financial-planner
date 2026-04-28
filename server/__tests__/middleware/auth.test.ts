@@ -1,17 +1,16 @@
 import jwt from 'jsonwebtoken';
 import express, { type Request, type Response } from 'express';
 import request from 'supertest';
-
-const TEST_SECRET = 'test-jwt-secret-that-is-at-least-32-chars-long';
-process.env['SUPABASE_JWT_SECRET'] = TEST_SECRET;
-
 import { requireAuth } from '../../middleware/auth';
+
+// SUPABASE_JWT_SECRET is set in jest.setup.ts (via setupFiles) before any module loads.
+const TEST_SECRET = process.env['SUPABASE_JWT_SECRET'] as string;
 
 function makeApp() {
   const app = express();
   app.use(requireAuth);
   app.get('/ping', (req: Request, res: Response) => {
-    res.json({ userId: req.auth.userId });
+    res.json({ userId: req.auth?.userId });
   });
   return app;
 }
