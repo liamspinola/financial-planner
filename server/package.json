@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "test": "jest --runInBand",
-    "test:api": "jest --runInBand"
+    "test:api": "jest --runInBand --testPathPattern=tests/routes"
   },
   "keywords": [],
   "author": "",

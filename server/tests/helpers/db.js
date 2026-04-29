@@ -31,7 +31,7 @@ function seedIncome(db, overrides = {}) {
   const FREQ_MAP = {
     weekly: (52 / 12),
     fortnightly: (26 / 12),
-    four_weekly: 13,
+    four_weekly: (13 / 12),
     monthly: 1,
     annual: (1 / 12),
   };
@@ -63,18 +63,15 @@ function seedExpense(db, overrides = {}) {
 }
 
 function clearAll(db) {
-  db.exec('DELETE FROM messages');
-  db.exec('DELETE FROM conversations');
-  db.exec('DELETE FROM spending_actuals');
-  db.exec('DELETE FROM progress_snapshots');
-  db.exec('DELETE FROM plan_cache');
-  db.exec('DELETE FROM expense_events');
-  db.exec('DELETE FROM windfalls');
-  db.exec('DELETE FROM expenses');
-  db.exec('DELETE FROM income_sources');
-  db.exec('DELETE FROM tranches');
-  db.exec('DELETE FROM debts');
-  db.exec('DELETE FROM settings');
+  const tables = [
+    'messages', 'conversations',
+    'spending_actuals', 'progress_snapshots', 'plan_cache',
+    'expense_events', 'windfalls', 'expenses', 'income_sources',
+    'tranches', 'debts', 'settings',
+  ];
+  for (const t of tables) {
+    try { db.exec(`DELETE FROM ${t}`); } catch { /* table may not exist in migration-free DBs */ }
+  }
 }
 
 module.exports = { seedDebt, seedIncome, seedExpense, clearAll };
