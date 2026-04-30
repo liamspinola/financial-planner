@@ -22,6 +22,9 @@ router.get('/summary', (req, res) => {
   const { month } = req.query;
   if (!month || !/^\d{4}-\d{2}$/.test(month))
     return res.status(400).json({ error: 'month param must be YYYY-MM' });
+  const monthNum = parseInt(month.split('-')[1], 10);
+  if (monthNum < 1 || monthNum > 12)
+    return res.status(400).json({ error: 'month must be a valid calendar month (01–12)' });
 
   const db = getDb();
   // Aggregate actuals by category for the month
@@ -61,6 +64,9 @@ router.post('/', (req, res) => {
   if (!label || typeof label !== 'string') return res.status(400).json({ error: 'label is required' });
   if (!isFiniteNonNeg(amount_actual)) return res.status(400).json({ error: 'amount_actual must be a non-negative number' });
   if (!record_month || !/^\d{4}-\d{2}$/.test(record_month)) return res.status(400).json({ error: 'record_month must be YYYY-MM' });
+  const monthNum = parseInt(record_month.split('-')[1], 10);
+  if (monthNum < 1 || monthNum > 12)
+    return res.status(400).json({ error: 'record_month must be a valid calendar month (01–12)' });
 
   const db = getDb();
   const { lastInsertRowid } = db.prepare(

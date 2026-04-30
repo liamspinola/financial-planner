@@ -49,8 +49,13 @@ if (process.env.NODE_ENV === 'test') {
 }
 
 app.use((err, req, res, next) => {
+  const status = err.status || err.statusCode || 500;
+  if (status < 500) {
+    // Client error — don't log stack trace
+    return res.status(status).json({ error: err.message || 'Bad request' });
+  }
   console.error(err.stack);
-  res.status(500).json({ error: err.message || 'Internal server error' });
+  res.status(status).json({ error: err.message || 'Internal server error' });
 });
 
 if (require.main === module) {

@@ -16,6 +16,9 @@ router.post('/', (req, res) => {
   const { snapshot_month, balances, notes } = req.body;
   if (!snapshot_month || !/^\d{4}-\d{2}$/.test(snapshot_month))
     return res.status(400).json({ error: 'snapshot_month must be YYYY-MM' });
+  const monthNum = parseInt(snapshot_month.split('-')[1], 10);
+  if (monthNum < 1 || monthNum > 12)
+    return res.status(400).json({ error: 'snapshot_month must be a valid calendar month (01–12)' });
   if (!balances || typeof balances !== 'object')
     return res.status(400).json({ error: 'balances must be an object { debtId: amount }' });
 
