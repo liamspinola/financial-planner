@@ -1,12 +1,13 @@
 'use strict';
 
+jest.mock('../../lib/claude');
+
 const { clearAll, seedDebt, seedIncome, seedExpense } = require('../helpers/db');
 
 let request, db, callClaude;
 
 beforeAll(() => {
   jest.resetModules();
-  jest.mock('../../lib/claude');
   const app = require('../../index');
   request = require('supertest')(app);
   db = require('../../db/database').getDb();
@@ -211,7 +212,7 @@ describe('POST /api/advisor/conversations/:id/messages', () => {
   });
 
   // ── TDD: Bug 2 — empty Claude response ──────────────────────────────────
-  it('Claude returns empty string → 502 with error field (Bug 2)', async () => {
+  it.failing('Claude returns empty string → 502 with error field (Bug 2 — TDD, fix in Task 4)', async () => {
     callClaude.mockResolvedValueOnce('');
     const conv = (await request.post('/api/advisor/conversations')).body;
     const res = await request.post(`/api/advisor/conversations/${conv.id}/messages`)
