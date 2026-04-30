@@ -56,3 +56,5 @@ app.use((err, req, res, next) => {
 app.listen(PORT, () => {
   console.log(`Liam's Wicked Financial Planner Tool API running on http://localhost:${PORT}`);
 });
+
+module.exports = app;
