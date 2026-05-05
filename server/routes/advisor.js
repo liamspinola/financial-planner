@@ -156,6 +156,10 @@ router.post('/conversations/:id/messages', async (req, res) => {
     return res.status(502).json({ error: 'Claude is unavailable: ' + err.message });
   }
 
+  if (!assistantContent || !assistantContent.trim()) {
+    return res.status(502).json({ error: 'Claude returned an empty response — please try again.' });
+  }
+
   // Insert assistant message
   const assistantSeq = userSeq + 1;
   db.prepare(

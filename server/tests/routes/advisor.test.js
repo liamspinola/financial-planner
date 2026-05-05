@@ -211,8 +211,8 @@ describe('POST /api/advisor/conversations/:id/messages', () => {
     expect(res.body).toHaveProperty('error');
   });
 
-  // ── TDD: Bug 2 — empty Claude response ──────────────────────────────────
-  it.failing('Claude returns empty string → 502 with error field (Bug 2 — TDD, fix in Task 4)', async () => {
+  // ── Bug 2: empty Claude response ──────────────────────────────────
+  it('Claude returns empty string → 502 with error field', async () => {
     callClaude.mockResolvedValueOnce('');
     const conv = (await request.post('/api/advisor/conversations')).body;
     const res = await request.post(`/api/advisor/conversations/${conv.id}/messages`)
