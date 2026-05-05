@@ -55,7 +55,7 @@ app.use((err, req, res, next) => {
     return res.status(status).json({ error: err.message || 'Bad request' });
   }
   console.error(err.stack);
-  res.status(status).json({ error: err.message || 'Internal server error' });
+  return res.status(status).json({ error: err.message || 'Internal server error' });
 });
 
 if (require.main === module) {

@@ -9,6 +9,15 @@ function isFiniteNonNeg(v) { return typeof v === 'number' && isFinite(v) && v >=
 // GET /api/actuals?month=YYYY-MM
 router.get('/', (req, res) => {
   const { month } = req.query;
+  if (month) {
+    if (!/^\d{4}-\d{2}$/.test(month)) {
+      return res.status(400).json({ error: 'month must be in YYYY-MM format' });
+    }
+    const monthNum = parseInt(month.split('-')[1], 10);
+    if (monthNum < 1 || monthNum > 12) {
+      return res.status(400).json({ error: 'month must be a valid calendar month (01–12)' });
+    }
+  }
   const db = getDb();
   if (month) {
     res.json(db.prepare('SELECT * FROM spending_actuals WHERE record_month = ? ORDER BY category ASC, id ASC').all(month));
