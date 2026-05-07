@@ -14,7 +14,7 @@ async function request(method, path, body, timeoutMs = API_TIMEOUT_MS) {
   try {
     const res = await fetch(BASE + path, opts);
     clearTimeout(timer);
-    const data = await res.json();
+    const data = res.status === 204 ? null : await res.json();
     if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status, data });
     return data;
   } catch (err) {
