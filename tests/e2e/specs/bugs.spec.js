@@ -23,6 +23,7 @@
 import { test, expect } from '@playwright/test';
 import { resetDb } from '../helpers/reset.js';
 import { seedDebt, seedIncome, seedAndGeneratePlan, seedEmergencyFund } from '../helpers/seed.js';
+import { AdvisorPage } from '../pages/AdvisorPage.js';
 
 const API = 'http://localhost:3001';
 
@@ -163,5 +164,53 @@ test.describe('Bug regressions', () => {
 
     // Both should agree on the baseline payoff months
     expect(whatif.baseline.payoffMonths).toBe(plan.payoffMonths);
+  });
+});
+
+test.describe('Delete session regression (Bug 1)', () => {
+  let advisor;
+
+  test.beforeEach(async ({ page, request }) => {
+    await resetDb(request);
+    await AdvisorPage.mockMessages(page);
+    advisor = new AdvisorPage(page);
+    await advisor.goto();
+  });
+
+  test('confirming delete removes session from sidebar (Bug 1 regression)', async ({ page }) => {
+    await advisor.newSessionButton.click();
+    await page.waitForTimeout(300);
+    const row = advisor.sessionRow('New conversation');
+    await row.hover();
+    await row.getByRole('button', { name: /Delete/i }).first().click();
+    await page.getByRole('button', { name: /Confirm|Yes/i }).first().click();
+    // Session must be gone — NOT silently stuck in the sidebar
+    await expect(advisor.emptyStateMessage).toBeVisible({ timeout: 5000 });
+  });
+
+  test('deleting second of two sessions keeps first session active', async ({ page }) => {
+    // Create two sessions
+    await advisor.newSessionButton.click();
+    await page.waitForTimeout(200);
+    await advisor.newSessionButton.click();
+    await page.waitForTimeout(200);
+
+    // Delete the active (top) session using sessionRow
+    const rows = page.locator('[class*="border-l-2"][class*="border-teal"]');
+    await rows.first().hover();
+    const deleteBtn = rows.first().getByRole('button', { name: /Delete/i }).first();
+    await deleteBtn.click();
+    await page.getByRole('button', { name: /Confirm|Yes/i }).first().click();
+
+    // One session should remain — NOT empty state
+    await expect(advisor.emptyStateMessage).not.toBeVisible({ timeout: 5000 });
+    await expect(advisor.chatTextarea).toBeVisible({ timeout: 5000 });
+  });
+
+  test('creating then immediately deleting shows empty state', async ({ page }) => {
+    await advisor.newSessionButton.click();
+    await page.waitForTimeout(300);
+    await advisor.deleteSession('New conversation');
+    await expect(advisor.emptyStateMessage).toBeVisible({ timeout: 5000 });
   });
 });
