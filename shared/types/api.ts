@@ -45,8 +45,8 @@ export const CreateIncomeSourceSchema = z.object({
   amount: z.number().int().min(1),
   /** four_weekly = 13 periods/year (supported by engine) */
   frequency: z.enum(['weekly', 'fortnightly', 'four_weekly', 'monthly', 'annual']).default('monthly'),
-  /** Pre-calculated monthly equivalent in pence */
-  monthlyEquivalent: z.number().int().min(1),
+  /** Server-computed monthly equivalent in pence; clients do not need to supply this */
+  monthlyEquivalent: z.number().int().min(1).optional(),
 });
 export type CreateIncomeSourceRequest = z.infer<typeof CreateIncomeSourceSchema>;
 
