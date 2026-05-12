@@ -1,19 +1,29 @@
 import { API_TIMEOUT_MS } from './constants';
+import { getAccessToken } from './auth';
 
-const BASE = '/api';
+const BASE = '/api/v1';
 
 async function request(method, path, body, timeoutMs = API_TIMEOUT_MS) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const token = await getAccessToken();
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
     signal: controller.signal,
   };
   if (body !== undefined) opts.body = JSON.stringify(body);
   try {
     const res = await fetch(BASE + path, opts);
     clearTimeout(timer);
+    if (res.status === 401) {
+      sessionStorage.setItem('returnTo', window.location.pathname);
+      window.location.href = '/login';
+      throw new Error('Session expired. Please sign in again.');
+    }
     const data = await res.json();
     if (!res.ok) throw Object.assign(new Error(data.error || 'Request failed'), { status: res.status, data });
     return data;
@@ -41,10 +51,10 @@ export const api = {
   deleteExpense:   (id)        => request('DELETE', `/budget/expenses/${id}`),
 
   // Plan
-  generatePlan:  ()             => request('POST', '/plan'),
-  getCachedPlan: ()             => request('GET',  '/plan/cached'),
-  whatIfPlan:    (extraMonthly) => request('POST', '/plan/whatif', { extraMonthly }, 30000),
-  lumpsumAdvise: (amount, applyMonth) => request('POST', '/plan/lumpsum', { amount, applyMonth }, 30000),
+  generatePlan:  ()             => request('GET', '/plan'),
+  getCachedPlan: ()             => request('GET', '/plan/cached'),
+  whatIfPlan:    (extraMonthly) => request('GET', `/plan/whatif?extraMonthly=${extraMonthly}`, undefined, 30000),
+  lumpsumAdvise: (amount, applyMonth) => request('GET', `/plan/lumpsum?amount=${amount}&applyMonth=${applyMonth}`, undefined, 30000),
 
   // AI
   generateAI: (mode) => request('POST', '/ai', { mode }),
