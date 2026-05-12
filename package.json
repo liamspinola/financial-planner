@@ -1,5 +1,5 @@
 {
-  "name": "liams-wicked-financial-planner-tool",
+  "name": "financial-planner",
   "version": "1.0.0",
   "private": true,
   "scripts": {
@@ -16,10 +16,21 @@
     "test:api": "npm run test:api --prefix server",
     "test:unit:client": "npm test --prefix client",
     "test:fast": "npm run test:unit:server && npm run test:unit:client",
-    "test:all": "npm run test:fast && npm run test:e2e"
+    "test:all": "npm run test:fast && npm run test:e2e",
+    "typecheck": "tsc --noEmit --project client/tsconfig.json && tsc --noEmit --project server/tsconfig.json",
+    "audit:ci": "npm audit --audit-level=high && npm audit --audit-level=high --prefix client && npm audit --audit-level=high --prefix server",
+    "test:migration": "tsx scripts/test-migration.ts"
   },
   "devDependencies": {
     "@playwright/test": "^1.59.1",
-    "concurrently": "^8.2.2"
+    "@types/better-sqlite3": "^7.6.13",
+    "concurrently": "^8.2.2",
+    "typescript": "^6.0.3"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.1.0",
+    "better-sqlite3": "^12.9.0",
+    "drizzle-orm": "^0.45.2",
+    "zod": "^4.3.6"
   }
 }
