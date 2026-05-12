@@ -95,9 +95,9 @@ export class AdvisorPage extends BasePage {
 
   // ── Route intercept helper ─────────────────────────────────────────────────
   /**
-   * Registers a page.route() intercept that returns a deterministic mock
-   * response for all advisor message POST requests.
-   * Call this in beforeEach for advisor tests to avoid hitting Claude CLI.
+   * Intercepts advisor POST /messages.
+   * @param {import('@playwright/test').Page} page
+   * @param {{ response?: string, newTitle?: string, errorResponse?: { status: number, message: string } }} [overrides]
    */
   static async mockMessages(page, overrides = {}) {
     let seq = 1;
@@ -106,6 +106,16 @@ export class AdvisorPage extends BasePage {
         await route.continue();
         return;
       }
+
+      if (overrides.errorResponse) {
+        await route.fulfill({
+          status: overrides.errorResponse.status,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: overrides.errorResponse.message }),
+        });
+        return;
+      }
+
       const body = route.request().postDataJSON();
       const userSeq = seq;
       const assistantSeq = seq + 1;

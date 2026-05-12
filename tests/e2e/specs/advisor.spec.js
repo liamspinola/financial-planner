@@ -179,3 +179,66 @@ test.describe('Advisor', () => {
     await expect(page.getByText('Cancelled Rename')).not.toBeVisible();
   });
 });
+
+test.describe('Advisor error paths', () => {
+  test('502 response shows error banner with Claude unavailable message', async ({ page, request }) => {
+    await resetDb(request);
+    await AdvisorPage.mockMessages(page, {
+      errorResponse: { status: 502, message: 'Claude is unavailable' },
+    });
+    const advisor = new AdvisorPage(page);
+    await advisor.goto();
+    await advisor.newSessionButton.click();
+    await advisor.sendMessage('Will this error?');
+    await expect(page.getByText(/Claude is unavailable/i)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('504 response shows error banner with timeout message', async ({ page, request }) => {
+    await resetDb(request);
+    await AdvisorPage.mockMessages(page, {
+      errorResponse: { status: 504, message: 'Claude took too long — please try again' },
+    });
+    const advisor = new AdvisorPage(page);
+    await advisor.goto();
+    await advisor.newSessionButton.click();
+    await advisor.sendMessage('Will this timeout?');
+    await expect(page.getByText(/took too long/i)).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('successful send after prior error clears the error banner', async ({ page, request }) => {
+    await resetDb(request);
+    let callCount = 0;
+    await page.route('**/api/advisor/conversations/*/messages', async (route) => {
+      if (route.request().method() !== 'POST') { await route.continue(); return; }
+      callCount++;
+      if (callCount === 1) {
+        await route.fulfill({
+          status: 502,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Temporary error' }),
+        });
+      } else {
+        const body = route.request().postDataJSON();
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            userMessage: { id: 1, conversation_id: 1, role: 'user', content: body.content, sequence: 1, created_at: new Date().toISOString() },
+            assistantMessage: { id: 2, conversation_id: 1, role: 'assistant', content: 'Recovery response.', sequence: 2, created_at: new Date().toISOString() },
+            newTitle: null,
+          }),
+        });
+      }
+    });
+    const advisor = new AdvisorPage(page);
+    await advisor.goto();
+    await advisor.newSessionButton.click();
+
+    await advisor.sendMessage('First attempt');
+    await expect(page.getByText(/Temporary error/i)).toBeVisible({ timeout: 10_000 });
+
+    await advisor.sendMessage('Second attempt');
+    await expect(page.getByText('Recovery response.')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Temporary error/i)).not.toBeVisible();
+  });
+});
