@@ -5,8 +5,8 @@ import request from 'supertest';
 jest.mock('../../middleware/rateLimit', () => {
   const rateLimit = jest.requireActual('express-rate-limit').default ?? jest.requireActual('express-rate-limit');
   return {
-    generalLimiter: rateLimit({ windowMs: 1000, max: 3, standardHeaders: true, legacyHeaders: false }),
-    aiLimiter:      rateLimit({ windowMs: 1000, max: 2, standardHeaders: true, legacyHeaders: false }),
+    generalLimiter: rateLimit({ windowMs: 1000, limit: 3, standardHeaders: true, legacyHeaders: false }),
+    aiLimiter:      rateLimit({ windowMs: 1000, limit: 2, standardHeaders: true, legacyHeaders: false }),
   };
 });
 
