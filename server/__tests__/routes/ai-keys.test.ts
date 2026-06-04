@@ -130,6 +130,13 @@ describe('DELETE /api/v1/ai-keys', () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true });
   });
+
+  it('returns 500 when DB delete fails', async () => {
+    mockDb.select.mockReturnValue(makeSelectChain([EXISTING_KEY]));
+    mockDb.delete.mockReturnValue({ where: jest.fn().mockRejectedValue(new Error('DB error')) });
+    const res = await request(app).delete('/api/v1/ai-keys');
+    expect(res.status).toBe(500);
+  });
 });
 
 describe('getDecryptedUserKey', () => {

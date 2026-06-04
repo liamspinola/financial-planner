@@ -59,7 +59,12 @@ router.delete('/', async (req: Request, res: Response): Promise<void> => {
     res.status(404).json({ error: 'No API key stored' });
     return;
   }
-  await db.delete(schema.userAiKeys).where(eq(schema.userAiKeys.userId, userId));
+  try {
+    await db.delete(schema.userAiKeys).where(eq(schema.userAiKeys.userId, userId));
+  } catch {
+    res.status(500).json({ error: 'Failed to delete key' });
+    return;
+  }
   res.json({ ok: true });
 });
 
