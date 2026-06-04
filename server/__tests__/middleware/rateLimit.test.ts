@@ -1,4 +1,4 @@
-import express, { type Request, type Response } from 'express';
+import express, { type Request, type Response, type RequestHandler } from 'express';
 import request from 'supertest';
 
 // Import AFTER mocking so the limiters use our fake windowMs
@@ -12,7 +12,7 @@ jest.mock('../../middleware/rateLimit', () => {
 
 import { generalLimiter, aiLimiter } from '../../middleware/rateLimit';
 
-function makeApp(limiter: any) {
+function makeApp(limiter: RequestHandler) {
   const app = express();
   app.set('trust proxy', false);
   app.use(limiter);
