@@ -7,7 +7,7 @@ const IV_BYTES = 12;
 function getMasterKey(): Buffer {
   const keyHex = process.env['BYOK_ENCRYPTION_KEY'];
   if (!keyHex) throw new Error('BYOK_ENCRYPTION_KEY environment variable is required');
-  if (keyHex.length !== 64) throw new Error('BYOK_ENCRYPTION_KEY must be 64-char hex (32 bytes)');
+  if (!/^[0-9a-fA-F]{64}$/.test(keyHex)) throw new Error('BYOK_ENCRYPTION_KEY must be 64-char hex (32 bytes)');
   return Buffer.from(keyHex, 'hex');
 }
 
@@ -35,6 +35,9 @@ export function decryptKey(encryptedKey: string, iv: string): string {
   const key = getMasterKey();
   const ivBuf = Buffer.from(iv, 'hex');
   const data = Buffer.from(encryptedKey, 'hex');
+  if (data.length <= AUTH_TAG_BYTES) {
+    throw new Error('Encrypted key data is too short to contain an auth tag');
+  }
   const tag = data.subarray(data.length - AUTH_TAG_BYTES);
   const ciphertext = data.subarray(0, data.length - AUTH_TAG_BYTES);
   const decipher = crypto.createDecipheriv(ALGORITHM, key, ivBuf);

@@ -45,4 +45,11 @@ describe('encryptKey / decryptKey', () => {
     expect(() => encryptKey('test')).toThrow(/64-char hex/);
     process.env['BYOK_ENCRYPTION_KEY'] = 'a'.repeat(64);
   });
+
+  it('throws if BYOK_ENCRYPTION_KEY contains non-hex characters', () => {
+    const originalKey = process.env['BYOK_ENCRYPTION_KEY'];
+    process.env['BYOK_ENCRYPTION_KEY'] = 'z'.repeat(64); // valid length, invalid hex
+    expect(() => encryptKey('test')).toThrow(/64-char hex/);
+    process.env['BYOK_ENCRYPTION_KEY'] = originalKey;
+  });
 });
