@@ -11,8 +11,12 @@ import settingsRouter      from './routes/settings';
 import progressRouter      from './routes/progress';
 import actualsRouter       from './routes/actuals';
 import advisorRouter       from './routes/advisor';
+import usersRouter         from './routes/users';
+import aiKeysRouter        from './routes/ai-keys';
+import { generalLimiter, aiLimiter } from './middleware/rateLimit';
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = Number(process.env['PORT'] ?? 3001);
 
 app.use(helmet({ contentSecurityPolicy: false }));
@@ -29,16 +33,20 @@ app.use(cors({
 
 app.use(express.json({ limit: '1mb' }));
 
+app.use('/api/v1/', generalLimiter);
+
 app.use('/api/v1/debts',          debtsRouter);
 app.use('/api/v1/budget',         budgetRouter);
 app.use('/api/v1/plan',           planRouter);
-app.use('/api/v1/ai',             aiRouter);
+app.use('/api/v1/ai',             aiLimiter, aiRouter);
 app.use('/api/v1/windfalls',      windfallsRouter);
 app.use('/api/v1/expense-events', expenseEventsRouter);
 app.use('/api/v1/settings',       settingsRouter);
 app.use('/api/v1/progress',       progressRouter);
 app.use('/api/v1/actuals',        actualsRouter);
-app.use('/api/v1/advisor',        advisorRouter);
+app.use('/api/v1/advisor',        aiLimiter, advisorRouter);
+app.use('/api/v1/users',          usersRouter);
+app.use('/api/v1/ai-keys',        aiKeysRouter);
 
 app.get('/api/v1/health', (_req: Request, res: Response) => {
   res.json({ ok: true, ts: new Date().toISOString() });
