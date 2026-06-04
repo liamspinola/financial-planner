@@ -25,6 +25,7 @@ const mockDb = {
 jest.mock('../../db/connection', () => ({ db: mockDb }));
 
 import aiKeysRouter from '../../routes/ai-keys';
+import { encryptKey } from '../../lib/encryption';
 
 const app = express();
 app.use(express.json());
@@ -98,6 +99,7 @@ describe('POST /api/v1/ai-keys', () => {
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({ ok: true, provider: 'anthropic' });
     expect(mockDb.insert).toHaveBeenCalled();
+    expect(encryptKey).toHaveBeenCalledWith('sk-ant-api03-valid-key-here-abc123');
   });
 
   it('replaces an existing key (delete + insert)', async () => {
@@ -127,5 +129,36 @@ describe('DELETE /api/v1/ai-keys', () => {
     const res = await request(app).delete('/api/v1/ai-keys');
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ ok: true });
+  });
+});
+
+describe('getDecryptedUserKey', () => {
+  it('returns decrypted key when row exists', async () => {
+    mockDb.select.mockReturnValue(makeSelectChain([{
+      encryptedKey: 'encrypted:sk-ant-secret',
+      iv: 'deadbeef000000000000000000000000',
+    }]));
+    const { getDecryptedUserKey } = require('../../routes/ai-keys');
+    const result = await getDecryptedUserKey('some-user-id');
+    expect(result).toBe('sk-ant-secret');
+  });
+
+  it('returns null when no row exists', async () => {
+    mockDb.select.mockReturnValue(makeSelectChain([]));
+    const { getDecryptedUserKey } = require('../../routes/ai-keys');
+    const result = await getDecryptedUserKey('some-user-id');
+    expect(result).toBeNull();
+  });
+
+  it('returns null if decryptKey throws', async () => {
+    mockDb.select.mockReturnValue(makeSelectChain([{
+      encryptedKey: 'bad-data',
+      iv: 'badbad',
+    }]));
+    const { decryptKey } = require('../../lib/encryption');
+    (decryptKey as jest.Mock).mockImplementationOnce(() => { throw new Error('bad tag'); });
+    const { getDecryptedUserKey } = require('../../routes/ai-keys');
+    const result = await getDecryptedUserKey('some-user-id');
+    expect(result).toBeNull();
   });
 });

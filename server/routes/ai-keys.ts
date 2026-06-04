@@ -15,7 +15,7 @@ const SaveKeySchema = z.object({
 });
 
 router.get('/', async (req: Request, res: Response): Promise<void> => {
-  const { userId } = req.auth;
+  const { userId } = req.auth!;
   const [existing] = await db.select({
     provider: schema.userAiKeys.provider,
     createdAt: schema.userAiKeys.createdAt,
@@ -35,21 +35,22 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     return;
   }
   const { apiKey, provider } = parsed.data;
-  const { userId } = req.auth;
-
-  // Always delete existing key first (one key per user per provider)
-  await db.delete(schema.userAiKeys).where(
-    and(eq(schema.userAiKeys.userId, userId), eq(schema.userAiKeys.provider, provider)),
-  );
-
-  const { encryptedKey, iv } = encryptKey(apiKey);
-  await db.insert(schema.userAiKeys).values({ userId, encryptedKey, iv, provider }).returning();
-
+  const { userId } = req.auth!;
+  try {
+    await db.delete(schema.userAiKeys).where(
+      and(eq(schema.userAiKeys.userId, userId), eq(schema.userAiKeys.provider, provider)),
+    );
+    const { encryptedKey, iv } = encryptKey(apiKey);
+    await db.insert(schema.userAiKeys).values({ userId, encryptedKey, iv, provider });
+  } catch {
+    res.status(500).json({ error: 'Failed to save key' });
+    return;
+  }
   res.status(201).json({ ok: true, provider });
 });
 
 router.delete('/', async (req: Request, res: Response): Promise<void> => {
-  const { userId } = req.auth;
+  const { userId } = req.auth!;
   const [existing] = await db.select({ id: schema.userAiKeys.id })
     .from(schema.userAiKeys)
     .where(eq(schema.userAiKeys.userId, userId));
