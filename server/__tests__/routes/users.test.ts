@@ -87,4 +87,13 @@ describe('DELETE /api/v1/users/me', () => {
     expect(res.status).toBe(502);
     expect(res.body.error).toMatch(/supabase/i);
   });
+
+  it('returns 500 if SUPABASE_URL is missing', async () => {
+    const original = process.env['SUPABASE_URL'];
+    delete process.env['SUPABASE_URL'];
+    const res = await request(app).delete('/api/v1/users/me');
+    process.env['SUPABASE_URL'] = original;
+    expect(res.status).toBe(500);
+    expect(res.body.error).toMatch(/misconfiguration/i);
+  });
 });
