@@ -8,7 +8,7 @@ function formatDate(isoDate) {
 }
 
 function formatGbp(amount) {
-  return `£${Math.round(amount).toLocaleString('en-GB')}`;
+  return `£${Math.round(amount / 100).toLocaleString('en-GB')}`;
 }
 
 /**

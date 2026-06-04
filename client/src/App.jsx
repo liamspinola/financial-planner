@@ -7,6 +7,7 @@ import Plan from './views/Plan';
 import Advisor from './views/Advisor';
 import Progress from './views/Progress';
 import Login from './views/Login';
+import AuthCallback from './views/AuthCallback';
 import { useAuth } from './hooks/useAuth';
 
 function PrivateRoute({ children }) {
@@ -45,8 +46,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/login" element={<Login />} />
-        <Route path="/*"     element={<AppShell />} />
+        <Route path="/login"         element={<Login />} />
+        <Route path="/auth/callback" element={<AuthCallback />} />
+        <Route path="/*"             element={<AppShell />} />
       </Routes>
     </BrowserRouter>
   );

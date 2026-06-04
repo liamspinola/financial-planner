@@ -15,14 +15,14 @@ const DEBT_TYPES = [
 ];
 
 function blankTranche() {
-  return { label: '', balance: '', apr: '', hasPromo: false, promo_end_date: '', post_promo_apr: '' };
+  return { label: '', balance: '', apr: '', hasPromo: false, promoEndDate: '', postPromoApr: '' };
 }
 
 function blankDebt() {
   return {
-    name: '', lender: '', debt_type: 'credit_card',
-    min_type: 'fixed', minimum_payment: '',
-    min_payment_pct: '2', min_payment_floor: '25',
+    name: '', lender: '', debtType: 'credit_card',
+    min_type: 'fixed', minimumPayment: '',
+    minPaymentPct: '2', minPaymentFloor: '25',
     notes: '',
     tranches: [blankTranche()],
   };
@@ -57,17 +57,17 @@ function DebtForm({ initial, onSave, onCancel }) {
     return {
       name: form.name,
       lender: form.lender,
-      debt_type: form.debt_type,
-      minimum_payment: usePct ? 0 : (parseFloat(form.minimum_payment) || 0),
-      min_payment_pct:   usePct ? (parseFloat(form.min_payment_pct) || 0) / 100 : null,
-      min_payment_floor: usePct ? (parseFloat(form.min_payment_floor) || 0) : null,
+      debtType: form.debtType,
+      minimumPayment: usePct ? 0 : Math.round((parseFloat(form.minimumPayment) || 0) * 100),
+      minPaymentPct:   usePct ? (parseFloat(form.minPaymentPct) || 0) / 100 : null,
+      minPaymentFloor: usePct ? Math.round((parseFloat(form.minPaymentFloor) || 0) * 100) : null,
       notes: form.notes?.trim() || null,
       tranches: form.tranches.map(t => ({
         label: t.label,
-        balance: parseFloat(t.balance) || 0,
+        balance: Math.round((parseFloat(t.balance) || 0) * 100),
         apr: (parseFloat(t.apr) || 0) / 100,
-        promo_end_date: t.hasPromo && t.promo_end_date ? t.promo_end_date : null,
-        post_promo_apr: t.hasPromo && t.post_promo_apr ? (parseFloat(t.post_promo_apr) || 0) / 100 : null,
+        promoEndDate: t.hasPromo && t.promoEndDate ? t.promoEndDate : null,
+        postPromoApr: t.hasPromo && t.postPromoApr ? (parseFloat(t.postPromoApr) || 0) / 100 : null,
       })),
     };
   }
@@ -82,8 +82,8 @@ function DebtForm({ initial, onSave, onCancel }) {
       const apr = parseFloat(t.apr);
       if (isNaN(apr) || apr < 0 || apr > 200) return `Segment ${i + 1}: APR must be between 0 and 200.`;
       if (t.hasPromo) {
-        if (!t.promo_end_date) return `Segment ${i + 1}: promo end date is required when promotional rate is enabled.`;
-        const postApr = parseFloat(t.post_promo_apr);
+        if (!t.promoEndDate) return `Segment ${i + 1}: promo end date is required when promotional rate is enabled.`;
+        const postApr = parseFloat(t.postPromoApr);
         if (isNaN(postApr) || postApr < 0 || postApr > 200) return `Segment ${i + 1}: post-promo APR must be between 0 and 200.`;
       }
     }
@@ -113,7 +113,7 @@ function DebtForm({ initial, onSave, onCancel }) {
         </div>
         <div>
           <label htmlFor="debt-type" className="label">Type</label>
-          <select id="debt-type" className="input" value={form.debt_type} onChange={e => setField('debt_type', e.target.value)}>
+          <select id="debt-type" className="input" value={form.debtType} onChange={e => setField('debtType', e.target.value)}>
             {DEBT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
@@ -134,18 +134,18 @@ function DebtForm({ initial, onSave, onCancel }) {
           </div>
           {form.min_type === 'fixed' ? (
             <input className="input" type="number" min="0" step="0.01" placeholder="0.00"
-              value={form.minimum_payment} onChange={e => setField('minimum_payment', e.target.value)} />
+              value={form.minimumPayment} onChange={e => setField('minimumPayment', e.target.value)} />
           ) : (
             <div className="flex gap-2">
               <div className="flex-1">
                 <label className="label text-xs">% of balance</label>
                 <input className="input" type="number" min="0" max="100" step="0.1" placeholder="2"
-                  value={form.min_payment_pct} onChange={e => setField('min_payment_pct', e.target.value)} />
+                  value={form.minPaymentPct} onChange={e => setField('minPaymentPct', e.target.value)} />
               </div>
               <div className="flex-1">
                 <label className="label text-xs">Floor (£)</label>
                 <input className="input" type="number" min="0" step="0.01" placeholder="25"
-                  value={form.min_payment_floor} onChange={e => setField('min_payment_floor', e.target.value)} />
+                  value={form.minPaymentFloor} onChange={e => setField('minPaymentFloor', e.target.value)} />
               </div>
             </div>
           )}
@@ -195,11 +195,11 @@ function DebtForm({ initial, onSave, onCancel }) {
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label htmlFor={`tranche-promo-date-${i}`} className="label">Promo End Date</label>
-                    <input id={`tranche-promo-date-${i}`} className="input" type="date" value={t.promo_end_date} onChange={e => setTranche(i, 'promo_end_date', e.target.value)} />
+                    <input id={`tranche-promo-date-${i}`} className="input" type="date" value={t.promoEndDate} onChange={e => setTranche(i, 'promoEndDate', e.target.value)} />
                   </div>
                   <div>
                     <label htmlFor={`tranche-post-apr-${i}`} className="label">Post-Promo APR (%)</label>
-                    <input id={`tranche-post-apr-${i}`} className="input" type="number" min="0" step="0.1" placeholder="e.g. 22.9" value={t.post_promo_apr} onChange={e => setTranche(i, 'post_promo_apr', e.target.value)} />
+                    <input id={`tranche-post-apr-${i}`} className="input" type="number" min="0" step="0.1" placeholder="e.g. 22.9" value={t.postPromoApr} onChange={e => setTranche(i, 'postPromoApr', e.target.value)} />
                   </div>
                 </div>
               )}
@@ -219,11 +219,11 @@ function DebtForm({ initial, onSave, onCancel }) {
 function DebtCard({ debt, tranches, onEdit, onDelete, confirmingDelete, onConfirmDelete, onCancelDelete }) {
   const [expanded, setExpanded] = useState(false);
   const totalBalance = tranches.reduce((s, t) => s + t.balance, 0);
-  const typeLabel = DEBT_TYPES.find(x => x.value === debt.debt_type)?.label || debt.debt_type;
+  const typeLabel = DEBT_TYPES.find(x => x.value === debt.debtType)?.label || debt.debtType;
 
   const promoAlerts = tranches.filter(t => {
-    if (!t.promo_end_date) return false;
-    const days = daysUntil(t.promo_end_date);
+    if (!t.promoEndDate) return false;
+    const days = daysUntil(t.promoEndDate);
     return days !== null && days <= PROMO_ALERT_DAYS && days >= 0;
   });
 
@@ -246,9 +246,9 @@ function DebtCard({ debt, tranches, onEdit, onDelete, confirmingDelete, onConfir
           <div className="text-right ml-4">
             <p className="text-lg font-semibold tabular-nums text-red-400">{gbp(totalBalance)}</p>
             <p className="text-xs text-slate-400">
-              Min: {debt.min_payment_pct != null
-                ? `${(debt.min_payment_pct * 100).toFixed(1)}%${debt.min_payment_floor ? ` (min ${gbp(debt.min_payment_floor)})` : ''}`
-                : `${gbp(debt.minimum_payment)}/mo`}
+              Min: {debt.minPaymentPct != null
+                ? `${(debt.minPaymentPct * 100).toFixed(1)}%${debt.minPaymentFloor ? ` (min ${gbp(debt.minPaymentFloor)})` : ''}`
+                : `${gbp(debt.minimumPayment)}/mo`}
             </p>
           </div>
         </div>
@@ -278,16 +278,16 @@ function DebtCard({ debt, tranches, onEdit, onDelete, confirmingDelete, onConfir
       {expanded && (
         <div className="border-t border-slate-700 px-5 py-4 space-y-3">
           {[...tranches].sort((a, b) => b.apr - a.apr).map(t => {
-            const days = t.promo_end_date ? daysUntil(t.promo_end_date) : null;
+            const days = t.promoEndDate ? daysUntil(t.promoEndDate) : null;
             return (
               <div key={t.id} className="flex items-center justify-between text-sm">
                 <div>
                   <span className="text-slate-200 font-medium">{t.label}</span>
-                  {t.promo_end_date && (
+                  {t.promoEndDate && (
                     <span className="ml-2 text-xs text-slate-400">
-                      Promo until {ukDate(t.promo_end_date)}
+                      Promo until {ukDate(t.promoEndDate)}
                       <PromoCountdown days={days} />
-                      {t.post_promo_apr && ` → then ${aprPct(t.post_promo_apr)}`}
+                      {t.postPromoApr && ` → then ${aprPct(t.postPromoApr)}`}
                     </span>
                   )}
                 </div>
@@ -335,7 +335,7 @@ export default function Debts() {
     if (editing) {
       const data = await api.updateDebt(editing, payload);
       setDebts(debts.map(d => d.id === editing ? data.debt : d));
-      setTranches([...tranches.filter(t => t.debt_id !== editing), ...data.tranches]);
+      setTranches([...tranches.filter(t => t.debtId !== editing), ...data.tranches]);
       setEditing(null);
     } else {
       const data = await api.createDebt(payload);
@@ -348,7 +348,7 @@ export default function Debts() {
   async function deleteDebt(id) {
     await api.deleteDebt(id);
     setDebts(debts.filter(d => d.id !== id));
-    setTranches(tranches.filter(t => t.debt_id !== id));
+    setTranches(tranches.filter(t => t.debtId !== id));
     setConfirmDeleteId(null);
   }
 
@@ -372,23 +372,23 @@ export default function Debts() {
 
       <div className="space-y-4">
         {debts.map(debt => {
-          const debtTranches = tranches.filter(t => t.debt_id === debt.id);
+          const debtTranches = tranches.filter(t => t.debtId === debt.id);
           return editing === debt.id ? (
             <DebtForm
               key={debt.id}
               initial={{
-                name: debt.name, lender: debt.lender || '', debt_type: debt.debt_type,
-                min_type: debt.min_payment_pct != null ? 'pct' : 'fixed',
-                minimum_payment: debt.minimum_payment,
-                min_payment_pct:   debt.min_payment_pct   != null ? (debt.min_payment_pct * 100).toFixed(1)   : '2',
-                min_payment_floor: debt.min_payment_floor != null ? debt.min_payment_floor.toFixed(2) : '25',
+                name: debt.name, lender: debt.lender || '', debtType: debt.debtType,
+                min_type: debt.minPaymentPct != null ? 'pct' : 'fixed',
+                minimumPayment: debt.minimumPayment != null ? (debt.minimumPayment / 100).toFixed(2) : '',
+                minPaymentPct:   debt.minPaymentPct   != null ? (debt.minPaymentPct * 100).toFixed(1)   : '2',
+                minPaymentFloor: debt.minPaymentFloor != null ? (debt.minPaymentFloor / 100).toFixed(2) : '25',
                 notes: debt.notes || '',
                 tranches: debtTranches.map(t => ({
-                  label: t.label, balance: t.balance,
+                  label: t.label, balance: t.balance != null ? (t.balance / 100).toFixed(2) : '',
                   apr: (t.apr * 100).toFixed(2),
-                  hasPromo: !!t.promo_end_date,
-                  promo_end_date: t.promo_end_date || '',
-                  post_promo_apr: t.post_promo_apr ? (t.post_promo_apr * 100).toFixed(2) : '',
+                  hasPromo: !!t.promoEndDate,
+                  promoEndDate: t.promoEndDate || '',
+                  postPromoApr: t.postPromoApr ? (t.postPromoApr * 100).toFixed(2) : '',
                 })),
               }}
               onSave={saveDebt}

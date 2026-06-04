@@ -40,16 +40,16 @@ export default function Dashboard() {
   if (loading) return <div className="p-8 flex justify-center"><Spinner /></div>;
 
   const totalDebt = tranches.reduce((s, t) => s + t.balance, 0);
-  const totalIncome = income.reduce((s, i) => s + i.monthly_equivalent, 0);
+  const totalIncome = income.reduce((s, i) => s + i.monthlyEquivalent, 0);
 
   // Promo expiry alerts (within PROMO_ALERT_DAYS)
   const promoAlerts = tranches.filter(t => {
-    if (!t.promo_end_date) return false;
-    const days = daysUntil(t.promo_end_date);
+    if (!t.promoEndDate) return false;
+    const days = daysUntil(t.promoEndDate);
     return days !== null && days >= 0 && days <= PROMO_ALERT_DAYS;
   }).map(t => {
-    const debt = debts.find(d => d.id === t.debt_id);
-    return { ...t, debtName: debt?.name || 'Unknown', days: daysUntil(t.promo_end_date) };
+    const debt = debts.find(d => d.id === t.debtId);
+    return { ...t, debtName: debt?.name || 'Unknown', days: daysUntil(t.promoEndDate) };
   });
 
   return (
@@ -95,7 +95,7 @@ export default function Dashboard() {
               <div className="text-sm">
                 <span className="font-medium text-amber-300">{t.debtName} — {t.label}</span>
                 <span className="text-slate-300 ml-1">
-                  0% promo expires {ukDate(t.promo_end_date)} ({t.days} days) — then moves to {aprPct(t.post_promo_apr)} APR
+                  0% promo expires {ukDate(t.promoEndDate)} ({t.days} days) — then moves to {aprPct(t.postPromoApr)} APR
                 </span>
               </div>
             </div>

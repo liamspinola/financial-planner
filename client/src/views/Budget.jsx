@@ -28,7 +28,7 @@ const CATEGORIES = [
 ];
 
 function blankIncome() { return { label: '', amount: '', frequency: 'monthly' }; }
-function blankExpense() { return { label: '', amount: '', category: CATEGORIES[0].label, is_essential: 1 }; }
+function blankExpense() { return { label: '', amount: '', category: CATEGORIES[0].label, isEssential: 1 }; }
 
 function InlineForm({ initial, onSave, onCancel, type }) {
   const [form, setForm] = useState(initial);
@@ -37,7 +37,7 @@ function InlineForm({ initial, onSave, onCancel, type }) {
     const next = { ...form, [k]: v };
     if (type === 'expense' && k === 'category') {
       const cat = CATEGORIES.find(c => c.label === v);
-      if (cat) next.is_essential = cat.essential ? 1 : 0;
+      if (cat) next.isEssential = cat.essential ? 1 : 0;
     }
     setForm(next);
   };
@@ -87,11 +87,11 @@ function InlineForm({ initial, onSave, onCancel, type }) {
             </td>
             <td className="px-4 py-2">
               <button
-                onClick={() => set('is_essential', form.is_essential ? 0 : 1)}
-                aria-label={`Toggle essential/discretionary — currently ${form.is_essential ? 'Essential' : 'Discretionary'}`}
-                className={`text-xs px-2 py-1 rounded font-medium ${form.is_essential ? 'bg-blue-500/20 text-blue-300' : 'bg-amber-500/20 text-amber-300'}`}
+                onClick={() => set('isEssential', form.isEssential ? 0 : 1)}
+                aria-label={`Toggle essential/discretionary — currently ${form.isEssential ? 'Essential' : 'Discretionary'}`}
+                className={`text-xs px-2 py-1 rounded font-medium ${form.isEssential ? 'bg-blue-500/20 text-blue-300' : 'bg-amber-500/20 text-amber-300'}`}
               >
-                {form.is_essential ? 'Essential' : 'Discretionary'}
+                {form.isEssential ? 'Essential' : 'Discretionary'}
               </button>
             </td>
           </>
@@ -129,7 +129,7 @@ export default function Budget() {
   const [reviewMonth, setReviewMonth] = useState(currentMonth);
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [editingActual, setEditingActual] = useState(null); // { expense_id, category, label, amount_actual }
+  const [editingActual, setEditingActual] = useState(null); // { category }
 
   useEffect(() => { load(); loadEf(); }, []);
 
@@ -163,7 +163,7 @@ export default function Budget() {
   }
 
   async function saveIncome(form) {
-    const payload = { label: form.label, amount: parseFloat(form.amount) || 0, frequency: form.frequency };
+    const payload = { label: form.label, amount: Math.round((parseFloat(form.amount) || 0) * 100), frequency: form.frequency };
     if (editingIncome) {
       const updated = await api.updateIncome(editingIncome, payload);
       setIncome(income.map(i => i.id === editingIncome ? updated : i));
@@ -181,7 +181,7 @@ export default function Budget() {
   }
 
   async function saveExpense(form) {
-    const payload = { label: form.label, amount: parseFloat(form.amount) || 0, category: form.category, is_essential: form.is_essential };
+    const payload = { label: form.label, amount: Math.round((parseFloat(form.amount) || 0) * 100), category: form.category, isEssential: !!form.isEssential };
     if (editingExpense) {
       const updated = await api.updateExpense(editingExpense, payload);
       setExpenses(expenses.map(e => e.id === editingExpense ? updated : e));
@@ -207,31 +207,32 @@ export default function Budget() {
   }
 
   async function saveActual(row, amountStr) {
-    const amount_actual = parseFloat(amountStr);
-    if (isNaN(amount_actual) || amount_actual < 0) return;
+    const parsed = parseFloat(amountStr);
+    if (isNaN(parsed) || parsed < 0) return;
+    const amountActual = Math.round(parsed * 100);
     // Find existing actual for this category+month or create
     const existing = await api.getActuals(reviewMonth);
     const match = existing.find(a => a.category === row.category);
     if (match) {
-      await api.updateActual(match.id, { amount_actual });
+      await api.updateActual(match.id, { amountActual });
     } else {
       // Find an expense_id for this category if possible
       const exp = expenses.find(e => e.category === row.category);
       await api.createActual({
-        expense_id: exp?.id ?? null,
+        expenseId: exp?.id ?? null,
         category: row.category,
         label: row.category,
-        amount_actual,
-        record_month: reviewMonth,
+        amountActual,
+        recordMonth: reviewMonth,
       });
     }
     await loadSummary(reviewMonth);
     setEditingActual(null);
   }
 
-  const totalIncome = income.reduce((s, i) => s + i.monthly_equivalent, 0);
-  const totalEssential = expenses.filter(e => e.is_essential).reduce((s, e) => s + e.amount, 0);
-  const totalDisc = expenses.filter(e => !e.is_essential).reduce((s, e) => s + e.amount, 0);
+  const totalIncome = income.reduce((s, i) => s + i.monthlyEquivalent, 0);
+  const totalEssential = expenses.filter(e => e.isEssential).reduce((s, e) => s + e.amount, 0);
+  const totalDisc = expenses.filter(e => !e.isEssential).reduce((s, e) => s + e.amount, 0);
   const totalExpenses = totalEssential + totalDisc;
   const surplus = totalIncome - totalExpenses;
 
@@ -304,7 +305,7 @@ export default function Budget() {
                               <input
                                 autoFocus
                                 type="number" min="0" step="0.01"
-                                defaultValue={row.actual}
+                                defaultValue={row.actual != null ? row.actual / 100 : ''}
                                 className="input w-24 py-0.5 text-xs text-right"
                                 onBlur={e => saveActual(row, e.target.value)}
                                 onKeyDown={e => { if (e.key === 'Enter') saveActual(row, e.target.value); if (e.key === 'Escape') setEditingActual(null); }}
@@ -330,7 +331,7 @@ export default function Budget() {
               {/* Impact summary */}
               {(() => {
                 const totalOver = summary.reduce((s, r) => s + Math.max(0, r.delta), 0);
-                const totalInc = income.reduce((s, i) => s + i.monthly_equivalent, 0);
+                const totalInc = income.reduce((s, i) => s + i.monthlyEquivalent, 0);
                 const totalExp = expenses.reduce((s, e) => s + e.amount, 0);
                 const avail = totalInc - totalExp;
                 const extraDays = avail > 0 ? Math.round((totalOver / avail) * 30) : 0;
@@ -373,14 +374,14 @@ export default function Budget() {
               <tbody className="divide-y divide-slate-700/50">
                 {income.map(item => (
                   editingIncome === item.id
-                    ? <InlineForm key={item.id} type="income" initial={{ label: item.label, amount: item.amount, frequency: item.frequency }} onSave={saveIncome} onCancel={() => setEditingIncome(null)} />
+                    ? <InlineForm key={item.id} type="income" initial={{ label: item.label, amount: item.amount != null ? item.amount / 100 : '', frequency: item.frequency }} onSave={saveIncome} onCancel={() => setEditingIncome(null)} />
                     : (
                       <tr key={item.id} className="hover:bg-slate-700/20 transition-colors">
                         <td className="px-4 py-3 text-slate-200">{item.label}</td>
                         <td className="px-4 py-3 tabular-nums text-slate-200">
                           {gbp(item.amount)}
                           {item.frequency !== 'monthly' && (
-                            <span className="ml-1.5 text-xs text-slate-400">≈ {gbp(item.monthly_equivalent)}/mo</span>
+                            <span className="ml-1.5 text-xs text-slate-400">≈ {gbp(item.monthlyEquivalent)}/mo</span>
                           )}
                         </td>
                         <td className="px-4 py-3 text-slate-400 capitalize">{FREQ_LABELS[item.frequency]}</td>
@@ -432,15 +433,15 @@ export default function Budget() {
               <tbody className="divide-y divide-slate-700/50">
                 {expenses.map(item => (
                   editingExpense === item.id
-                    ? <InlineForm key={item.id} type="expense" initial={{ label: item.label, amount: item.amount, category: item.category, is_essential: item.is_essential }} onSave={saveExpense} onCancel={() => setEditingExpense(null)} />
+                    ? <InlineForm key={item.id} type="expense" initial={{ label: item.label, amount: item.amount != null ? item.amount / 100 : '', category: item.category, isEssential: item.isEssential }} onSave={saveExpense} onCancel={() => setEditingExpense(null)} />
                     : (
                       <tr key={item.id} className="hover:bg-slate-700/20 transition-colors">
                         <td className="px-4 py-3 text-slate-400 text-xs max-w-[140px] truncate">{item.category}</td>
                         <td className="px-4 py-3 text-slate-200">{item.label}</td>
                         <td className="px-4 py-3 tabular-nums text-slate-200">{gbp(item.amount)}</td>
                         <td className="px-4 py-3">
-                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${item.is_essential ? 'bg-blue-500/20 text-blue-300' : 'bg-amber-500/20 text-amber-300'}`}>
-                            {item.is_essential ? 'Essential' : 'Discretionary'}
+                          <span className={`text-xs px-2 py-0.5 rounded font-medium ${item.isEssential ? 'bg-blue-500/20 text-blue-300' : 'bg-amber-500/20 text-amber-300'}`}>
+                            {item.isEssential ? 'Essential' : 'Discretionary'}
                           </span>
                         </td>
                         <td className="px-4 py-3">

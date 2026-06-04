@@ -48,8 +48,7 @@ export interface EngineExpense {
   id: number;
   amount: number;
   category: string;
-  /** Engine checks `is_essential === 1` for SQLite compatibility, so we pass boolean */
-  is_essential: boolean;
+  is_essential: 1 | 0;
 }
 
 export interface EngineWindfall {
@@ -109,7 +108,7 @@ export function toEngineExpense(r: ExpenseRow): EngineExpense {
     id: r.id,
     amount: r.amount,
     category: r.category,
-    is_essential: r.isEssential,
+    is_essential: r.isEssential ? 1 : 0,
   };
 }
 

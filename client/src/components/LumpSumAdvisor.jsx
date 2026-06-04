@@ -14,7 +14,7 @@ function OptionCard({ option, amount, applyMonth, onWindfallSaved }) {
       const label = option.targetDebtName
         ? `Lump sum – ${option.targetDebtName}`
         : `Lump sum – ${option.name}`;
-      await api.createWindfall({ label, amount, apply_month: applyMonth });
+      await api.createWindfall({ label, amount, applyMonth });
       setSaved(true);
       onWindfallSaved();
     } catch {
@@ -138,7 +138,7 @@ export default function LumpSumAdvisor({ onWindfallSaved, planMonths, planChartD
     setError(null);
     setResult(null);
     try {
-      const data = await api.lumpsumAdvise(num, applyMonth);
+      const data = await api.lumpsumAdvise(Math.round(num * 100), applyMonth);
       setResult(data);
     } catch (err) {
       setError(err.message || 'Analysis failed — please try again.');

@@ -7,14 +7,19 @@ if (!supabaseUrl || !supabaseAnon) {
   throw new Error('VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY must be set');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseAnon);
+export const supabase = createClient(supabaseUrl, supabaseAnon, {
+  auth: { flowType: 'implicit' },
+});
 
 export async function signInWithGoogle(): Promise<void> {
   await supabase.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: window.location.origin } });
 }
 
 export async function signInWithMagicLink(email: string): Promise<void> {
-  const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.origin } });
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: `${window.location.origin}/auth/callback` },
+  });
   if (error) throw error;
 }
 

@@ -31,19 +31,12 @@ export default function Progress() {
         setPlan(p);
         setSnapshots(s);
         // Pre-populate inputs from last snapshot if it's not for this month
-        if (p && s.length > 0) {
+        if (p?.debtIds && s.length > 0) {
           const last = s[s.length - 1];
-          if (last.snapshot_month !== currentMonth) {
-            setBalanceInputs(Object.fromEntries(
-              p.debtIds.map(id => [id, last.balances[id] ?? ''])
-            ));
-          } else {
-            setBalanceInputs(Object.fromEntries(
-              p.debtIds.map(id => [id, last.balances[id] ?? ''])
-            ));
-            setSnapshotNote(last.notes || '');
-          }
-        } else if (p) {
+          const entries = p.debtIds.map(id => [id, last.balances[id] != null ? last.balances[id] / 100 : '']);
+          setBalanceInputs(Object.fromEntries(entries));
+          if (last.snapshotMonth === currentMonth) setSnapshotNote(last.notes || '');
+        } else if (p?.debtIds) {
           setBalanceInputs(Object.fromEntries(p.debtIds.map(id => [id, ''])));
         }
       } finally {
@@ -76,11 +69,11 @@ export default function Progress() {
     setSaving(true);
     try {
       const balances = Object.fromEntries(
-        plan.debtIds.map(id => [id, parseFloat(balanceInputs[id]) || 0])
+        plan.debtIds.map(id => [id, Math.round((parseFloat(balanceInputs[id]) || 0) * 100)])
       );
-      const saved = await api.saveSnapshot({ snapshot_month: currentMonth, balances, notes: snapshotNote || null });
+      const saved = await api.saveSnapshot({ snapshotMonth: currentMonth, balances, notes: snapshotNote || null });
       setSnapshots(prev => {
-        const existing = prev.findIndex(s => s.snapshot_month === currentMonth);
+        const existing = prev.findIndex(s => s.snapshotMonth === currentMonth);
         if (existing >= 0) { const n = [...prev]; n[existing] = saved; return n; }
         return [...prev, saved];
       });
@@ -94,7 +87,7 @@ export default function Progress() {
 
   if (loading) return <div className="p-8 flex justify-center"><Spinner /></div>;
 
-  if (!plan) {
+  if (!plan || !plan.debtIds) {
     return (
       <div className="p-8">
         <PageHeader title="Progress" subtitle="Track actual balances vs plan" />
@@ -126,7 +119,7 @@ export default function Progress() {
 
   // Overlay actual snapshot data
   for (const snap of snapshots) {
-    const offset = monthOffset(snap.snapshot_month);
+    const offset = monthOffset(snap.snapshotMonth);
     if (offset == null || offset < 1 || offset > chartData.length) continue;
     const row = chartData[offset - 1];
     if (!row) continue;
@@ -137,12 +130,12 @@ export default function Progress() {
   let vsMessage = null;
   if (snapshots.length > 0) {
     const latest = snapshots[snapshots.length - 1];
-    const offset = monthOffset(latest.snapshot_month);
+    const offset = monthOffset(latest.snapshotMonth);
     if (offset != null && offset >= 1 && offset <= chartData.length) {
       const planTotal  = plan.debtIds.reduce((s, id) => s + (chartData[offset - 1][`plan_${id}`] || 0), 0);
-      const actualTotal = latest.total_balance;
+      const actualTotal = latest.totalBalance;
       const diff = planTotal - actualTotal;
-      if (Math.abs(diff) > 1) {
+      if (Math.abs(diff) > 100) {
         vsMessage = diff > 0
           ? `${gbp(diff)} ahead of plan — great work!`
           : `${gbp(Math.abs(diff))} behind plan`;
@@ -152,7 +145,7 @@ export default function Progress() {
     }
   }
 
-  const thisMonthSnap = snapshots.find(s => s.snapshot_month === currentMonth);
+  const thisMonthSnap = snapshots.find(s => s.snapshotMonth === currentMonth);
 
   return (
     <div className="p-8">
@@ -208,7 +201,7 @@ export default function Progress() {
             <LineChart width={chartWidth} height={300} data={chartData} margin={{ top: 4, right: 16, bottom: 0, left: 16 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
               <XAxis dataKey="month" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-              <YAxis tickFormatter={v => `£${(v / 1000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+              <YAxis tickFormatter={v => `£${(v / 100000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
               <Tooltip content={<ChartTooltip />} />
               <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
               {plan.debtIds.map((id, i) => (
@@ -238,8 +231,8 @@ export default function Progress() {
           <div className="space-y-2">
             {[...snapshots].reverse().map(snap => (
               <div key={snap.id} className="flex items-center gap-4 text-sm border-b border-slate-700/50 pb-2 last:border-0 last:pb-0">
-                <span className="text-slate-400 w-20 shrink-0">{snap.snapshot_month}</span>
-                <span className="text-red-300 font-medium tabular-nums">{gbp(snap.total_balance)}</span>
+                <span className="text-slate-400 w-20 shrink-0">{snap.snapshotMonth}</span>
+                <span className="text-red-300 font-medium tabular-nums">{gbp(snap.totalBalance)}</span>
                 {snap.notes && <span className="text-slate-500 text-xs flex-1 truncate">{snap.notes}</span>}
                 <button onClick={() => deleteSnapshot(snap.id)} className="ml-auto p-1 text-slate-500 hover:text-red-400">
                   <Trash2 size={12} />

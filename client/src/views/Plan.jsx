@@ -108,13 +108,13 @@ export default function Plan() {
 
   // Windfalls state
   const [windfalls, setWindfalls] = useState([]);
-  const [wfForm, setWfForm] = useState({ label: '', amount: '', apply_month: '' });
+  const [wfForm, setWfForm] = useState({ label: '', amount: '', applyMonth: '' });
   const [editingWf, setEditingWf] = useState(null); // id being edited
   const [wfOpen, setWfOpen] = useLocalStorage('plan_wf_open', true);
 
   // Expense events state
   const [expenseEvents, setExpenseEvents] = useState([]);
-  const [evForm, setEvForm] = useState({ label: '', amount: '', apply_month: '', category: 'expected' });
+  const [evForm, setEvForm] = useState({ label: '', amount: '', applyMonth: '', category: 'expected' });
   const [editingEv, setEditingEv] = useState(null); // id being edited
   const [evOpen, setEvOpen] = useLocalStorage('plan_ev_open', true);
 
@@ -157,12 +157,14 @@ export default function Plan() {
   }
 
   async function saveWindfall() {
+    const parsedAmount = parseFloat(wfForm.amount);
+    const parsedMonth = parseInt(wfForm.applyMonth, 10);
     const payload = {
       label: wfForm.label.trim(),
-      amount: parseFloat(wfForm.amount),
-      apply_month: parseInt(wfForm.apply_month, 10),
+      amount: Math.round(parsedAmount * 100),
+      applyMonth: parsedMonth,
     };
-    if (!payload.label || isNaN(payload.amount) || isNaN(payload.apply_month)) return;
+    if (!payload.label || isNaN(parsedAmount) || isNaN(parsedMonth)) return;
     if (editingWf) {
       const updated = await api.updateWindfall(editingWf, payload);
       setWindfalls(ws => ws.map(w => w.id === editingWf ? updated : w));
@@ -171,7 +173,7 @@ export default function Plan() {
       const created = await api.createWindfall(payload);
       setWindfalls(ws => [...ws, created]);
     }
-    setWfForm({ label: '', amount: '', apply_month: '' });
+    setWfForm({ label: '', amount: '', applyMonth: '' });
   }
 
   async function deleteWindfall(id) {
@@ -180,13 +182,15 @@ export default function Plan() {
   }
 
   async function saveExpenseEvent() {
+    const parsedAmount = parseFloat(evForm.amount);
+    const parsedMonth = parseInt(evForm.applyMonth, 10);
     const payload = {
       label: evForm.label.trim(),
-      amount: parseFloat(evForm.amount),
-      apply_month: parseInt(evForm.apply_month, 10),
+      amount: Math.round(parsedAmount * 100),
+      applyMonth: parsedMonth,
       category: evForm.category,
     };
-    if (!payload.label || isNaN(payload.amount) || isNaN(payload.apply_month)) return;
+    if (!payload.label || isNaN(parsedAmount) || isNaN(parsedMonth)) return;
     try {
       if (editingEv !== null) {
         await api.updateExpenseEvent(editingEv, payload);
@@ -194,7 +198,7 @@ export default function Plan() {
       } else {
         await api.createExpenseEvent(payload);
       }
-      setEvForm({ label: '', amount: '', apply_month: '', category: 'expected' });
+      setEvForm({ label: '', amount: '', applyMonth: '', category: 'expected' });
       await loadExpenseEvents();
       if (plan) await generate();
     } catch (err) {
@@ -254,7 +258,7 @@ export default function Plan() {
     if (!plan) return;
     setWhatIfLoading(true);
     try {
-      const result = await api.whatIfPlan(extra);
+      const result = await api.whatIfPlan(Math.round(extra * 100));
       setWhatIfResult(result);
     } catch { /* silently ignore */ } finally {
       setWhatIfLoading(false);
@@ -356,8 +360,8 @@ export default function Plan() {
                       <input className="input w-24 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={wfForm.amount} onChange={e => setWfForm(f => ({ ...f, amount: e.target.value }))} />
                       <select
                         className="input py-1 text-xs"
-                        value={wfForm.apply_month}
-                        onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))}
+                        value={wfForm.applyMonth}
+                        onChange={e => setWfForm(f => ({ ...f, applyMonth: e.target.value }))}
                       >
                         <option value="">Select month</option>
                         {(plan?.chartData || []).map(p => (
@@ -365,17 +369,17 @@ export default function Plan() {
                         ))}
                       </select>
                       <button onClick={saveWindfall} className="btn-sm-teal text-xs">Save</button>
-                      <button onClick={() => { setEditingWf(null); setWfForm({ label: '', amount: '', apply_month: '' }); }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
+                      <button onClick={() => { setEditingWf(null); setWfForm({ label: '', amount: '', applyMonth: '' }); }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
                     </>
                   ) : (
                     <>
-                      <span className="text-violet-400 font-medium">£{w.amount.toLocaleString('en-GB')}</span>
+                      <span className="text-violet-400 font-medium">£{(w.amount / 100).toLocaleString('en-GB')}</span>
                       <span className="text-slate-300">{w.label}</span>
                       <span className="text-slate-500">
-                        {monthDateMap[w.apply_month] ? formatMonthLabel(monthDateMap[w.apply_month]) : `month ${w.apply_month}`}
+                        {monthDateMap[w.applyMonth] ? formatMonthLabel(monthDateMap[w.applyMonth]) : `month ${w.applyMonth}`}
                       </span>
                       <div className="ml-auto flex gap-1">
-                        <button onClick={() => { setEditingWf(w.id); setWfForm({ label: w.label, amount: w.amount, apply_month: w.apply_month }); }} className="p-1 text-slate-400 hover:text-slate-200"><Edit2 size={11} /></button>
+                        <button onClick={() => { setEditingWf(w.id); setWfForm({ label: w.label, amount: w.amount / 100, applyMonth: w.applyMonth }); }} className="p-1 text-slate-400 hover:text-slate-200"><Edit2 size={11} /></button>
                         <button onClick={() => deleteWindfall(w.id)} className="p-1 text-slate-400 hover:text-red-400"><Trash2 size={11} /></button>
                       </div>
                     </>
@@ -390,15 +394,15 @@ export default function Plan() {
               <input className="input w-28 py-1 text-xs" type="number" min="1" placeholder="£ amount" value={wfForm.amount} onChange={e => setWfForm(f => ({ ...f, amount: e.target.value }))} />
               <select
                 className="input py-1 text-xs"
-                value={wfForm.apply_month}
-                onChange={e => setWfForm(f => ({ ...f, apply_month: e.target.value }))}
+                value={wfForm.applyMonth}
+                onChange={e => setWfForm(f => ({ ...f, applyMonth: e.target.value }))}
               >
                 <option value="">Select month</option>
                 {(plan?.chartData || []).map(p => (
                   <option key={p.month} value={p.month}>{formatMonthLabel(p.date)}</option>
                 ))}
               </select>
-              <button onClick={saveWindfall} disabled={!wfForm.label || !wfForm.amount || !wfForm.apply_month} className="btn-sm-teal text-xs disabled:opacity-40"><Plus size={12} /> Add windfall</button>
+              <button onClick={saveWindfall} disabled={!wfForm.label || !wfForm.amount || !wfForm.applyMonth} className="btn-sm-teal text-xs disabled:opacity-40"><Plus size={12} /> Add windfall</button>
             </div>
           )}
         </div>
@@ -436,29 +440,29 @@ export default function Plan() {
                         <option value="expected">Expected</option>
                         <option value="unexpected">Unexpected</option>
                       </select>
-                      <select className="input py-1 text-xs" value={evForm.apply_month} onChange={e => setEvForm(f => ({ ...f, apply_month: e.target.value }))}>
+                      <select className="input py-1 text-xs" value={evForm.applyMonth} onChange={e => setEvForm(f => ({ ...f, applyMonth: e.target.value }))}>
                         <option value="">Select month</option>
                         {(plan?.chartData || []).map(p => (
                           <option key={p.month} value={p.month}>{formatMonthLabel(p.date)}</option>
                         ))}
                       </select>
                       <button onClick={saveExpenseEvent} className="btn-sm-teal text-xs">Save</button>
-                      <button onClick={() => { setEditingEv(null); setEvForm({ label: '', amount: '', apply_month: '', category: 'expected' }); }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
+                      <button onClick={() => { setEditingEv(null); setEvForm({ label: '', amount: '', applyMonth: '', category: 'expected' }); }} className="text-xs text-slate-400 hover:text-slate-200">Cancel</button>
                     </>
                   ) : (
                     <>
                       <span className={`font-medium ${ev.category === 'unexpected' ? 'text-red-400' : 'text-amber-400'}`}>
-                        -£{ev.amount.toLocaleString('en-GB')}
+                        -£{(ev.amount / 100).toLocaleString('en-GB')}
                       </span>
                       <span className="text-slate-300">{ev.label}</span>
                       <span className={`text-xs px-1.5 py-0.5 rounded ${ev.category === 'unexpected' ? 'bg-red-900/40 text-red-300' : 'bg-amber-900/40 text-amber-300'}`}>
                         {ev.category}
                       </span>
                       <span className="text-slate-500">
-                        {monthDateMap[ev.apply_month] ? formatMonthLabel(monthDateMap[ev.apply_month]) : `month ${ev.apply_month}`}
+                        {monthDateMap[ev.applyMonth] ? formatMonthLabel(monthDateMap[ev.applyMonth]) : `month ${ev.applyMonth}`}
                       </span>
                       <div className="ml-auto flex gap-1">
-                        <button onClick={() => { setEditingEv(ev.id); setEvForm({ label: ev.label, amount: ev.amount, apply_month: ev.apply_month, category: ev.category }); }} className="p-1 text-slate-400 hover:text-slate-200"><Edit2 size={11} /></button>
+                        <button onClick={() => { setEditingEv(ev.id); setEvForm({ label: ev.label, amount: ev.amount / 100, applyMonth: ev.applyMonth, category: ev.category }); }} className="p-1 text-slate-400 hover:text-slate-200"><Edit2 size={11} /></button>
                         <button onClick={() => deleteExpenseEvent(ev.id)} className="p-1 text-slate-400 hover:text-red-400"><Trash2 size={11} /></button>
                       </div>
                     </>
@@ -475,7 +479,7 @@ export default function Plan() {
                 <option value="expected">Expected</option>
                 <option value="unexpected">Unexpected</option>
               </select>
-              <select className="input py-1 text-xs" value={evForm.apply_month} onChange={e => setEvForm(f => ({ ...f, apply_month: e.target.value }))}>
+              <select className="input py-1 text-xs" value={evForm.applyMonth} onChange={e => setEvForm(f => ({ ...f, applyMonth: e.target.value }))}>
                 <option value="">Select month</option>
                 {(plan?.chartData || []).map(p => (
                   <option key={p.month} value={p.month}>{formatMonthLabel(p.date)}</option>
@@ -483,7 +487,7 @@ export default function Plan() {
               </select>
               <button
                 onClick={saveExpenseEvent}
-                disabled={!evForm.label || !evForm.amount || !evForm.apply_month}
+                disabled={!evForm.label || !evForm.amount || !evForm.applyMonth}
                 className="btn-sm-teal text-xs disabled:opacity-40"
               >
                 <Plus size={12} /> Add expense
@@ -675,7 +679,7 @@ export default function Plan() {
                       interval="preserveStartEnd"
                       tick={{ fill: '#94a3b8', fontSize: 11 }}
                     />
-                    <YAxis tickFormatter={v => `£${(v/1000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                    <YAxis tickFormatter={v => `£${(v/100000).toFixed(0)}k`} tick={{ fill: '#94a3b8', fontSize: 11 }} />
                     <Tooltip content={<ChartTooltip />} />
                     <Legend wrapperStyle={{ fontSize: 12, color: '#94a3b8' }} />
                     {paidOffDates.map((d, i) => (

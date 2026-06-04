@@ -29,23 +29,24 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   const userId = req.auth!.userId;
   const { name, lender, debtType, minimumPayment, minPaymentPct, minPaymentFloor, notes, tranches } = parsed.data;
 
-  const result = await db.transaction(async (tx) => {
-    const [debt] = await tx.insert(schema.debts).values({
-      userId,
-      name,
-      lender: lender ?? null,
-      debtType,
-      minimumPayment: minimumPayment ?? 0,
-      minPaymentPct: minPaymentPct ?? null,
-      minPaymentFloor: minPaymentFloor ?? null,
-      notes: notes ?? null,
-    }).returning();
+  const [debt] = await db.insert(schema.debts).values({
+    userId,
+    name,
+    lender: lender ?? null,
+    debtType,
+    minimumPayment: minimumPayment ?? 0,
+    minPaymentPct: minPaymentPct ?? null,
+    minPaymentFloor: minPaymentFloor ?? null,
+    notes: notes ?? null,
+  }).returning();
 
-    if (!debt) throw new Error('Debt insert returned no rows');
+  if (!debt) { res.status(500).json({ error: 'Debt insert returned no rows' }); return; }
 
-    const insertedTranches = await Promise.all(
+  let insertedTranches: (typeof schema.tranches.$inferSelect)[];
+  try {
+    insertedTranches = await Promise.all(
       tranches.map((t, i) =>
-        tx.insert(schema.tranches).values({
+        db.insert(schema.tranches).values({
           userId,
           debtId: debt.id,
           label: t.label,
@@ -61,9 +62,12 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
         })
       )
     );
+  } catch (err) {
+    await db.delete(schema.debts).where(eq(schema.debts.id, debt.id));
+    throw err;
+  }
 
-    return { debt, tranches: insertedTranches };
-  });
+  const result = { debt, tranches: insertedTranches };
 
   await db.delete(schema.planCache).where(eq(schema.planCache.userId, userId));
   res.status(201).json(result);
@@ -95,40 +99,34 @@ router.put('/:id', async (req: Request, res: Response): Promise<void> => {
 
   const { name, lender, debtType, minimumPayment, minPaymentPct, minPaymentFloor, notes, tranches } = parsed.data;
 
-  await db.transaction(async (tx) => {
-    await tx.update(schema.debts).set({
-      name,
-      lender: lender ?? null,
-      debtType,
-      minimumPayment: minimumPayment ?? 0,
-      minPaymentPct: minPaymentPct ?? null,
-      minPaymentFloor: minPaymentFloor ?? null,
-      notes: notes ?? null,
-    }).where(and(eq(schema.debts.id, id), eq(schema.debts.userId, userId)));
+  await db.update(schema.debts).set({
+    name,
+    lender: lender ?? null,
+    debtType,
+    minimumPayment: minimumPayment ?? 0,
+    minPaymentPct: minPaymentPct ?? null,
+    minPaymentFloor: minPaymentFloor ?? null,
+    notes: notes ?? null,
+  }).where(and(eq(schema.debts.id, id), eq(schema.debts.userId, userId)));
 
-    await tx.delete(schema.tranches).where(
-      and(eq(schema.tranches.debtId, id), eq(schema.tranches.userId, userId))
-    );
+  await db.delete(schema.tranches).where(
+    and(eq(schema.tranches.debtId, id), eq(schema.tranches.userId, userId))
+  );
 
-    await Promise.all(
-      tranches.map((t, i) =>
-        tx.insert(schema.tranches).values({
-          userId,
-          debtId: id,
-          label: t.label,
-          balance: t.balance,
-          apr: t.apr,
-          promoEndDate: t.promoEndDate ?? null,
-          postPromoApr: t.postPromoApr ?? null,
-          sortOrder: t.sortOrder ?? i,
-        }).returning().then((rows) => {
-          const row = rows[0];
-          if (!row) throw new Error('Tranche insert returned no rows');
-          return row;
-        })
-      )
-    );
-  });
+  await Promise.all(
+    tranches.map((t, i) =>
+      db.insert(schema.tranches).values({
+        userId,
+        debtId: id,
+        label: t.label,
+        balance: t.balance,
+        apr: t.apr,
+        promoEndDate: t.promoEndDate ?? null,
+        postPromoApr: t.postPromoApr ?? null,
+        sortOrder: t.sortOrder ?? i,
+      }).returning()
+    )
+  );
 
   await db.delete(schema.planCache).where(eq(schema.planCache.userId, userId));
 

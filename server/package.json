@@ -4,11 +4,11 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "tsx index.ts",
+    "start": "tsx --env-file=../.env index.ts",
     "test": "jest --passWithNoTests",
     "test:unit": "jest --passWithNoTests",
     "typecheck": "tsc --noEmit",
-    "dev": "tsx --watch index.ts",
+    "dev": "tsx --watch --env-file=../.env index.ts",
     "build": "tsc"
   },
   "keywords": [],

@@ -120,7 +120,41 @@ router.get('/', async (req: Request, res: Response): Promise<void> => {
   const { recommended, reason, interestSaved, monthsSaved } = recommend(avalanche, snowball);
   const best  = recommended === 'avalanche' ? avalanche : snowball;
   const guide = buildGuide(best.monthlyStates, debtMap, summary);
-  const result = { summary, avalanche, snowball, recommended, reason, interestSaved, monthsSaved, guide, generatedAt: new Date().toISOString() };
+
+  // Fields expected by Plan.jsx
+  const debtIds = [...debtMap.keys()];
+  const debtNames: Record<number, string> = {};
+  for (const [id, group] of debtMap) debtNames[id] = group.debtName;
+
+  const chartData = best.monthlyStates.map(state => {
+    const point: Record<string, number | string> = { month: state.month, date: state.date };
+    for (const id of debtIds) point[`debt_${id}`] = state.balances[id] ?? 0;
+    return point;
+  });
+
+  const result = {
+    summary,
+    guide,
+    generatedAt: new Date().toISOString(),
+    payoffMonths: best.payoffMonths,
+    debtFreeDate: formatDebtFreeDate(startDate, best.payoffMonths),
+    totalInterest: best.totalInterest,
+    recommendation: { strategy: recommended },
+    comparison: {
+      avalanche: { debtFreeDate: formatDebtFreeDate(startDate, avalanche.payoffMonths), totalInterest: avalanche.totalInterest },
+      snowball:  { debtFreeDate: formatDebtFreeDate(startDate, snowball.payoffMonths),  totalInterest: snowball.totalInterest  },
+    },
+    chartData,
+    debtIds,
+    debtNames,
+    // kept for backward compat (AI routes, cached plan reader)
+    avalanche,
+    snowball,
+    recommended,
+    reason,
+    interestSaved,
+    monthsSaved,
+  };
 
   // Upsert plan cache
   const [existing] = await db.select({ id: schema.planCache.id }).from(schema.planCache).where(eq(schema.planCache.userId, userId));

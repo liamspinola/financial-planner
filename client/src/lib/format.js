@@ -8,7 +8,7 @@ export function gbp(amount, decimals = 0) {
     currency: 'GBP',
     minimumFractionDigits: decimals,
     maximumFractionDigits: decimals,
-  }).format(amount);
+  }).format(amount / 100);
 }
 
 /**
