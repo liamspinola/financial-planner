@@ -119,6 +119,20 @@ describe('GeminiProvider', () => {
     expect(mockGenerateContentStream).toHaveBeenCalledTimes(1);
     // The prompt built must mention history context
     expect(JSON.stringify(mockGenerateContentStream.mock.calls[0])).toContain('What should I do?');
+    // The assistant history entry must be translated to role 'model'
+    const assistantEntry = (contents as Array<{ role: string; parts: Array<{ text: string }> }>)
+      ?.find(c => c.parts?.some(p => p.text === 'Focus on high-APR debts.'));
+    expect(assistantEntry?.role).toBe('model');
+  });
+
+  it('skips empty-string tokens from the Gemini response', async () => {
+    mockGenerateContentStream.mockResolvedValue(makeStreamResponse(['hello', '', 'world']));
+    const provider = new GeminiProvider('test-key');
+    const tokens: string[] = [];
+    for await (const t of provider.streamAnalysis(CTX, 'test', [])) {
+      tokens.push(t);
+    }
+    expect(tokens).toEqual(['hello', 'world']);
   });
 
   it('re-throws errors from the Gemini SDK', async () => {
