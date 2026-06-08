@@ -16,11 +16,13 @@ const SAFETY_SETTINGS = [
 
 export class GeminiProvider implements AIProvider {
   readonly providerName: AIProviderName = 'gemini';
-  private readonly apiKey: string;
+  private readonly client: GoogleGenerativeAI;
+  private readonly model: ReturnType<GoogleGenerativeAI['getGenerativeModel']>;
 
   constructor(apiKey: string) {
     if (!apiKey) throw new Error('GEMINI_API_KEY is required to construct GeminiProvider');
-    this.apiKey = apiKey;
+    this.client = new GoogleGenerativeAI(apiKey);
+    this.model = this.client.getGenerativeModel({ model: MODEL_ID, safetySettings: SAFETY_SETTINGS });
   }
 
   async *streamAnalysis(
@@ -28,12 +30,6 @@ export class GeminiProvider implements AIProvider {
     userMessage: string,
     history: AIMessage[],
   ): AsyncIterable<string> {
-    const genAI = new GoogleGenerativeAI(this.apiKey);
-    const model = genAI.getGenerativeModel({
-      model: MODEL_ID,
-      safetySettings: SAFETY_SETTINGS,
-    });
-
     const systemPreamble = buildSystemPreamble(context);
 
     const contents = [
@@ -46,9 +42,15 @@ export class GeminiProvider implements AIProvider {
       { role: 'user' as const, parts: [{ text: userMessage }] },
     ];
 
-    const result = await model.generateContentStream({ contents });
+    const result = await this.model.generateContentStream({ contents });
     for await (const chunk of result.stream) {
-      const text = chunk.text();
+      let text: string;
+      try {
+        text = chunk.text();
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        throw new Error(`Gemini response blocked or failed: ${msg}`);
+      }
       if (text) yield text;
     }
   }
