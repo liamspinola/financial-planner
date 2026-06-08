@@ -5,7 +5,7 @@ import * as schema from '../../drizzle/schema';
 import { requireAuth } from '../middleware/auth';
 import { toEngineConv } from '../db/mappers';
 import { getProvider } from '../ai/router';
-import type { AIMessage, FinancialContext } from '../../shared/types/ai';
+import type { AIMessage, FinancialContext, AIProvider } from '../../shared/types/ai';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { buildAdvisorPrompt } = require('../engine/advisor') as typeof import('../engine/advisor');
@@ -132,7 +132,7 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
 
   const prompt = buildAdvisorPrompt(toEngineConv(currentConv), recentMessages);
 
-  let provider;
+  let provider: AIProvider;
   try {
     provider = await getProvider(userId);
   } catch (err: unknown) {
