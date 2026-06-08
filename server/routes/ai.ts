@@ -98,6 +98,7 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
   res.setHeader('Connection', 'keep-alive');
 
   try {
+    // History not passed for one-shot analysis requests (stateless endpoint)
     for await (const token of provider.streamAnalysis(context, userMessage, [])) {
       res.write(`data: ${JSON.stringify({ token })}\n\n`);
     }
