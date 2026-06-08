@@ -4,13 +4,22 @@ import { db } from '../db/connection';
 import * as schema from '../../drizzle/schema';
 import { requireAuth } from '../middleware/auth';
 import { toEngineConv } from '../db/mappers';
-import { callClaude } from '../lib/claude';
+import { getProvider } from '../ai/router';
+import type { AIMessage, FinancialContext } from '../../shared/types/ai';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { buildAdvisorPrompt } = require('../engine/advisor') as typeof import('../engine/advisor');
 
 const router = Router();
 router.use(requireAuth);
+
+async function collectStream(iterable: AsyncIterable<string>): Promise<string> {
+  const parts: string[] = [];
+  for await (const token of iterable) {
+    parts.push(token);
+  }
+  return parts.join('');
+}
 
 async function buildUserContextSnapshot(userId: string): Promise<string | null> {
   const [debts, income, expenses, planCacheRows] = await Promise.all([
@@ -101,13 +110,11 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
   const [conv] = await db.select().from(schema.conversations).where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, userId), sql`${schema.conversations.deletedAt} IS NULL`));
   if (!conv) { res.status(404).json({ error: 'Conversation not found' }); return; }
 
-  // Determine next sequence number
   const [seqRow] = await db.select({ maxSeq: sql<number>`COALESCE(MAX(${schema.messages.sequence}), 0)` }).from(schema.messages).where(eq(schema.messages.conversationId, id));
   const lastSeq = Number(seqRow?.maxSeq ?? 0);
   const userSeq = lastSeq + 1;
   const isFirst = userSeq === 1;
 
-  // Capture context snapshot on first message when context is enabled
   let currentConv = conv;
   if (isFirst && conv.useContext && !conv.contextSnapshot) {
     const snapshot = await buildUserContextSnapshot(userId);
@@ -117,48 +124,78 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
     }
   }
 
-  // Insert user message
   const [userMessage] = await db.insert(schema.messages).values({ userId, conversationId: id, role: 'user', content: content.trim(), sequence: userSeq }).returning();
   if (!userMessage) { res.status(500).json({ error: 'Failed to insert user message' }); return; }
 
-  // Fetch last ≤6 messages for prompt
   const recentMessages = await db.select().from(schema.messages).where(eq(schema.messages.conversationId, id)).orderBy(desc(schema.messages.sequence)).limit(6);
   recentMessages.reverse();
 
-  // Build prompt and call Claude
   const prompt = buildAdvisorPrompt(toEngineConv(currentConv), recentMessages);
-  let assistantContent: string;
+
+  let provider;
   try {
-    assistantContent = await callClaude(prompt, 60000);
+    provider = await getProvider(userId);
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    if (msg.includes('timed out') || msg.includes('timeout')) {
-      res.status(504).json({ error: 'Claude took too long — please try again' });
-    } else {
-      res.status(502).json({ error: 'Claude is unavailable: ' + msg });
-    }
+    res.status(502).json({ error: 'AI provider unavailable: ' + msg });
     return;
   }
 
+  const history: AIMessage[] = recentMessages
+    .filter(m => m.id !== userMessage.id)
+    .map(m => ({
+      role: m.role as 'user' | 'assistant',
+      content: m.content,
+      createdAt: m.createdAt,
+    }));
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const emptyContext: FinancialContext = {
+    debts: [],
+    monthlyIncomePence: 0,
+    monthlyExpensesPence: 0,
+    strategy: 'avalanche',
+    debtFreeDateEstimate: '',
+    totalInterestPence: 0,
+    windfalls: [],
+  };
+
+  const assistantTokens: string[] = [];
+  try {
+    for await (const token of provider.streamAnalysis(emptyContext, prompt, history)) {
+      assistantTokens.push(token);
+      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.write(`data: ${JSON.stringify({ error: 'AI provider error: ' + msg })}\n\n`);
+    res.write('data: [DONE]\n\n');
+    res.end();
+    return;
+  }
+
+  const assistantContent = assistantTokens.join('');
   const assistantSeq = userSeq + 1;
   const [assistantMessage] = await db.insert(schema.messages).values({ userId, conversationId: id, role: 'assistant', content: assistantContent, sequence: assistantSeq }).returning();
 
-  let newTitle: string | null = null;
+  const meta: { assistantMessageId?: number; newTitle?: string } = {};
+  if (assistantMessage) meta.assistantMessageId = assistantMessage.id;
 
-  // Auto-generate title on first message
   if (isFirst) {
     try {
       const titlePrompt = `Give a conversation title of 4-6 words for a financial chat that started with: "${content.trim().slice(0, 200)}". Respond with only the title — no punctuation, no quotes.`;
-      const raw = await callClaude(titlePrompt, 30000);
+      const raw = await collectStream(provider.streamAnalysis(emptyContext, titlePrompt, []));
       const title = raw.trim().slice(0, 60);
       if (title) {
         await db.update(schema.conversations).set({ title, updatedAt: new Date().toISOString() }).where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, userId)));
-        newTitle = title;
+        meta.newTitle = title;
       }
-    } catch { /* non-critical */ }
+    } catch { /* non-critical — title generation failure does not abort the response */ }
   }
 
-  // Regenerate rolling summary every 6 messages
   const totalMessages = assistantSeq;
   if (totalMessages > 6 && totalMessages % 6 === 2) {
     try {
@@ -166,7 +203,7 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
       if (olderMessages.length > 0) {
         const historyText = olderMessages.map(m => `${m.role === 'user' ? 'User' : 'Assistant'}: ${m.content}`).join('\n\n');
         const summaryPrompt = `In 2-3 sentences, summarise the key points from this financial advice conversation:\n\n${historyText}\n\nSummary:`;
-        const summary = await callClaude(summaryPrompt, 30000);
+        const summary = await collectStream(provider.streamAnalysis(emptyContext, summaryPrompt, []));
         await db.update(schema.conversations).set({ summary: summary.trim() }).where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, userId)));
       }
     } catch { /* non-critical */ }
@@ -174,7 +211,9 @@ router.post('/conversations/:id/messages', async (req: Request, res: Response): 
 
   await db.update(schema.conversations).set({ updatedAt: new Date().toISOString() }).where(and(eq(schema.conversations.id, id), eq(schema.conversations.userId, userId)));
 
-  res.json({ userMessage, assistantMessage, newTitle });
+  res.write(`data: ${JSON.stringify({ meta })}\n\n`);
+  res.write('data: [DONE]\n\n');
+  res.end();
 });
 
 export default router;

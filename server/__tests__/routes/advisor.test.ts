@@ -17,8 +17,8 @@ jest.mock('../../db/connection', () => ({
   },
 }));
 
-jest.mock('../../lib/claude', () => ({
-  callClaude: jest.fn(),
+jest.mock('../../ai/router', () => ({
+  getProvider: jest.fn(),
 }));
 
 jest.mock('../../engine/advisor', () => ({
@@ -26,11 +26,13 @@ jest.mock('../../engine/advisor', () => ({
 }));
 
 import advisorRouter from '../../routes/advisor';
+import { getProvider } from '../../ai/router';
+import { MockAIProvider } from '../../ai/providers/mock';
 
 const mockDb = jest.requireMock('../../db/connection').db as {
   select: jest.Mock; insert: jest.Mock; update: jest.Mock; delete: jest.Mock;
 };
-const { callClaude } = jest.requireMock('../../lib/claude') as { callClaude: jest.Mock };
+const mockGetProvider = getProvider as jest.Mock;
 const { buildAdvisorPrompt } = jest.requireMock('../../engine/advisor') as { buildAdvisorPrompt: jest.Mock };
 
 // ── Chain builders ─────────────────────────────────────────────────────────
@@ -54,10 +56,6 @@ function makeUpdateChain() {
   chain.set = jest.fn().mockReturnValue(chain);
   chain.where = jest.fn().mockResolvedValue([]);
   return chain;
-}
-
-function makeDeleteChain() {
-  return { where: jest.fn().mockResolvedValue([]) };
 }
 
 // ── Fixtures ───────────────────────────────────────────────────────────────
@@ -120,8 +118,8 @@ describe('PATCH /api/v1/advisor/conversations/:id', () => {
 
   it('updates title', async () => {
     mockDb.select
-      .mockReturnValueOnce(makeSelectChain([CONV]))  // find conv
-      .mockReturnValueOnce(makeSelectChain([{ ...CONV, title: 'New title' }])); // re-fetch
+      .mockReturnValueOnce(makeSelectChain([CONV]))
+      .mockReturnValueOnce(makeSelectChain([{ ...CONV, title: 'New title' }]));
     mockDb.update.mockReturnValue(makeUpdateChain());
     const res = await request(makeApp()).patch('/api/v1/advisor/conversations/1').send({ title: 'New title' });
     expect(res.status).toBe(200);
@@ -185,28 +183,66 @@ describe('POST /api/v1/advisor/conversations/:id/messages', () => {
     expect(res.status).toBe(404);
   });
 
-  it('inserts user and assistant messages and returns both', async () => {
+  it('streams SSE tokens for the assistant response', async () => {
     mockDb.select
       .mockReturnValueOnce(makeSelectChain([CONV]))        // find conv
-      .mockReturnValueOnce(makeSelectChain([]))            // max sequence (no prior messages)
-      .mockReturnValueOnce(makeSelectChain([]))            // context data: debts
-      .mockReturnValueOnce(makeSelectChain([]))            // context data: income
-      .mockReturnValueOnce(makeSelectChain([]))            // context data: expenses
-      .mockReturnValueOnce(makeSelectChain([]))            // context data: planCache
-      .mockReturnValueOnce(makeSelectChain([USER_MSG]))    // recent messages for prompt
-      .mockReturnValueOnce(makeSelectChain([USER_MSG]))    // fetch user msg
-      .mockReturnValueOnce(makeSelectChain([ASSIST_MSG])); // fetch assistant msg
+      .mockReturnValueOnce(makeSelectChain([]))            // max sequence
+      .mockReturnValueOnce(makeSelectChain([]))            // context: debts
+      .mockReturnValueOnce(makeSelectChain([]))            // context: income
+      .mockReturnValueOnce(makeSelectChain([]))            // context: expenses
+      .mockReturnValueOnce(makeSelectChain([]))            // context: planCache
+      .mockReturnValueOnce(makeSelectChain([USER_MSG]));   // recent messages
     mockDb.insert
       .mockReturnValueOnce(makeInsertChain([USER_MSG]))
       .mockReturnValueOnce(makeInsertChain([ASSIST_MSG]));
     mockDb.update.mockReturnValue(makeUpdateChain());
 
+    mockGetProvider.mockResolvedValue(new MockAIProvider('Sure!'));
     buildAdvisorPrompt.mockReturnValue('test prompt');
-    callClaude.mockResolvedValue('Sure!');
 
-    const res = await request(makeApp()).post('/api/v1/advisor/conversations/1/messages').send({ content: 'Help me' });
+    const res = await request(makeApp())
+      .post('/api/v1/advisor/conversations/1/messages')
+      .send({ content: 'Help me' })
+      .buffer(true)
+      .parse((res, callback) => {
+        let data = '';
+        res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+        res.on('end', () => callback(null, data));
+      });
+
     expect(res.status).toBe(200);
-    expect(res.body.userMessage.role).toBe('user');
-    expect(res.body.assistantMessage.role).toBe('assistant');
+    expect(res.headers['content-type']).toMatch(/text\/event-stream/);
+    const body = res.body as string;
+    expect(body).toContain('[DONE]');
+  });
+
+  it('calls getProvider with the authenticated userId', async () => {
+    mockDb.select
+      .mockReturnValueOnce(makeSelectChain([CONV]))
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([]))
+      .mockReturnValueOnce(makeSelectChain([USER_MSG]));
+    mockDb.insert
+      .mockReturnValueOnce(makeInsertChain([USER_MSG]))
+      .mockReturnValueOnce(makeInsertChain([ASSIST_MSG]));
+    mockDb.update.mockReturnValue(makeUpdateChain());
+
+    mockGetProvider.mockResolvedValue(new MockAIProvider('ok'));
+    buildAdvisorPrompt.mockReturnValue('prompt');
+
+    await request(makeApp())
+      .post('/api/v1/advisor/conversations/1/messages')
+      .send({ content: 'Help me' })
+      .buffer(true)
+      .parse((res, callback) => {
+        let data = '';
+        res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+        res.on('end', () => callback(null, data));
+      });
+
+    expect(mockGetProvider).toHaveBeenCalledWith('uid-1');
   });
 });
