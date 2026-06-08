@@ -27,6 +27,7 @@ describe('buildAnalysisPrompt — mode B', () => {
   it('contains the monthly income', () => {
     const prompt = buildAnalysisPrompt(BASE_DATA, 'B', BASE_DATA.expenses);
     expect(prompt).toContain('£3000');
+    expect(prompt).not.toContain('£300000'); // Guard: ensure pence not shown raw
   });
 
   it('contains the debt name', () => {
