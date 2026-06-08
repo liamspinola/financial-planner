@@ -3,82 +3,25 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/connection';
 import * as schema from '../../drizzle/schema';
 import { requireAuth } from '../middleware/auth';
-import { callClaude } from '../lib/claude';
-import { toEngineDebt, toEngineTranche, toEngineIncome, toEngineExpense } from '../db/mappers';
+import { toEngineDebt, toEngineTranche, toEngineIncome } from '../db/mappers';
+import { getProvider } from '../ai/router';
+import type { FinancialContext } from '../../shared/types/ai';
 
 const router = Router();
 router.use(requireAuth);
 
-function buildPrompt(data: {
-  summary: Record<string, number>;
-  debts: Array<{ name: string; minimum_payment: number }>;
-  tranches: Array<{ debt_id: number; label: string; balance: number; apr: number; promo_end_date: string | null }>;
-  income: unknown[];
-  expenses: Array<{ amount: number; category: string; is_essential: boolean }>;
-  recommendation: { strategy: string };
-  comparison: Record<string, { debtFreeDate: string; totalInterest: number }>;
-}, mode: string): string {
-  const { summary, debts, tranches, recommendation, comparison, expenses } = data;
-
-  const debtList = debts.map(d => {
-    const dTranches = tranches.filter(t => t.debt_id === d.id);
-    const trancheDesc = dTranches.map(t => {
-      const aprPct = (t.apr * 100).toFixed(1);
-      const promoNote = t.promo_end_date ? ` (0% promo until ${t.promo_end_date})` : '';
-      return `${t.label}: £${t.balance.toFixed(0)} @ ${aprPct}% APR${promoNote}`;
-    }).join(', ');
-    return `- ${(d as any).name}: ${trancheDesc} | Min payment: £${d.minimum_payment}/month`;
-  }).join('\n');
-
-  const stratLabel = recommendation.strategy === 'avalanche' ? 'Avalanche (highest APR first)' : 'Snowball (lowest balance first)';
-  const altLabel   = recommendation.strategy === 'avalanche' ? 'Snowball' : 'Avalanche';
-  const winComp    = comparison[recommendation.strategy]!;
-  const altComp    = comparison[recommendation.strategy === 'avalanche' ? 'snowball' : 'avalanche']!;
-
-  let prompt = `You are an experienced UK financial adviser. Analyse this person's financial position and write a clear, encouraging payoff plan explanation.
-
-FINANCIAL SUMMARY:
-- Monthly take-home income: £${summary['totalIncome']!.toFixed(0)}
-- Monthly essential expenses: £${summary['essentialExpenses']!.toFixed(0)}
-- Monthly discretionary expenses: £${summary['discretionaryExpenses']!.toFixed(0)}
-- Monthly surplus after expenses: £${summary['surplusAfterExpenses']!.toFixed(0)}
-- Monthly surplus after all debt minimums: £${summary['availableForDebt']!.toFixed(0)}
-
-DEBTS (${stratLabel} order recommended):
-${debtList}
-
-PAYOFF PROJECTION:
-- Recommended strategy: ${stratLabel}
-- Debt-free date: ${winComp.debtFreeDate}
-- Total interest: £${winComp.totalInterest.toFixed(0)}
-- Alternative (${altLabel}): debt-free ${altComp.debtFreeDate}, total interest £${altComp.totalInterest.toFixed(0)}`;
-
-  if (mode === 'C') {
-    const discMap: Record<string, number> = {};
-    for (const e of expenses) {
-      if (!e.is_essential) discMap[e.category] = (discMap[e.category] ?? 0) + e.amount;
-    }
-    const topDisc = Object.entries(discMap).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([cat, amt]) => `- ${cat}: £${(amt as number).toFixed(0)}/month`).join('\n');
-    if (topDisc) prompt += `\n\nTOP DISCRETIONARY SPENDING:\n${topDisc}`;
-    prompt += `\n\nWrite:\n1. A 3-paragraph plain-English explanation of the plan and why this strategy was chosen. Tone: experienced, direct, encouraging. No jargon. No bullet points in the paragraphs.\n2. A bullet list of 3-5 specific budget recommendations with exact £ amounts and their impact on payoff speed. Focus on highest-leverage cuts only. Format each as: "• [Category]: Cut from £X to £Y/month — saves £Z in interest / speeds up payoff by N months"`;
-  } else {
-    prompt += `\n\nWrite a 3-paragraph plain-English explanation of this payoff plan and why this strategy was recommended. Tone: experienced, direct, encouraging. No jargon.`;
-  }
-
-  return prompt;
-}
-
-function parseResponse(text: string, mode: string): { narrative: string; budgetTips: string | null } {
-  if (mode !== 'C') return { narrative: text.trim(), budgetTips: null };
-  const bulletStart = text.search(/\n[•\-\*] /);
-  if (bulletStart === -1) return { narrative: text.trim(), budgetTips: null };
-  return { narrative: text.slice(0, bulletStart).trim(), budgetTips: text.slice(bulletStart).trim() };
-}
-
 router.post('/', async (req: Request, res: Response): Promise<void> => {
   const { mode = 'C' } = req.body as { mode?: string };
-  if (!['A', 'B', 'C'].includes(mode)) { res.status(400).json({ error: 'Invalid mode — must be A, B, or C' }); return; }
-  if (mode === 'A') { res.json({ narrative: null, budgetTips: null, cached: false }); return; }
+  if (!['A', 'B', 'C'].includes(mode)) {
+    res.status(400).json({ error: 'Invalid mode — must be A, B, or C' });
+    return;
+  }
+
+  // Mode A: return empty result immediately — no AI call needed.
+  if (mode === 'A') {
+    res.json({ narrative: null, budgetTips: null, cached: false });
+    return;
+  }
 
   const userId = req.auth!.userId;
 
@@ -89,39 +32,83 @@ router.post('/', async (req: Request, res: Response): Promise<void> => {
     db.select().from(schema.expenses).where(eq(schema.expenses.userId, userId)),
   ]);
 
-  if (debts.length === 0) { res.status(400).json({ error: 'No data to analyse' }); return; }
-
-  const [cached] = await db.select().from(schema.planCache).where(eq(schema.planCache.userId, userId));
-  if (!cached) { res.status(400).json({ error: 'Generate the plan first before requesting AI analysis' }); return; }
-
-  const planResult = JSON.parse(cached.calcResult);
-  const engineDebts    = debts.map(toEngineDebt);
-  const engineTranches = tranches.map(toEngineTranche);
-  const engineIncome   = income.map(toEngineIncome);
-  const engineExpenses = expenses.map(toEngineExpense);
-
-  const prompt = buildPrompt({
-    summary:        planResult.summary,
-    debts:          engineDebts,
-    tranches:       engineTranches,
-    income:         engineIncome,
-    expenses:       engineExpenses,
-    recommendation: planResult.recommendation ?? { strategy: planResult.recommended },
-    comparison:     planResult.comparison ?? { avalanche: planResult.avalanche, snowball: planResult.snowball },
-  }, mode);
-
-  let stdout: string;
-  try {
-    stdout = await callClaude(prompt, 180000);
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    res.status(502).json({ error: 'Claude is unavailable: ' + msg });
+  if (debts.length === 0) {
+    res.status(400).json({ error: 'No data to analyse' });
     return;
   }
 
-  const { narrative, budgetTips } = parseResponse(stdout, mode);
-  await db.update(schema.planCache).set({ aiNarrative: narrative, aiBudgetTips: budgetTips ?? null, aiMode: mode }).where(eq(schema.planCache.userId, userId));
-  res.json({ narrative, budgetTips, cached: false });
+  const [cached] = await db.select().from(schema.planCache).where(eq(schema.planCache.userId, userId));
+  if (!cached) {
+    res.status(400).json({ error: 'Generate the plan first before requesting AI analysis' });
+    return;
+  }
+
+  const planResult = JSON.parse(cached.calcResult);
+
+  // Resolve the provider before opening the SSE stream so we can return 502
+  // cleanly if provider resolution fails (e.g. missing GEMINI_API_KEY).
+  let provider;
+  try {
+    provider = await getProvider(userId);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ error: 'AI provider unavailable: ' + msg });
+    return;
+  }
+
+  // Build FinancialContext — NO userId, email, or displayName.
+  const engineDebts    = debts.map(toEngineDebt);
+  const engineTranches = tranches.map(toEngineTranche);
+  const engineIncome   = income.map(toEngineIncome);
+
+  const totalIncomePence    = engineIncome.reduce((sum, i) => sum + i.monthly_equivalent, 0);
+  const totalExpensesPence  = expenses.filter(e => e.isEssential).reduce((sum, e) => sum + e.amount, 0);
+
+  const context: FinancialContext = {
+    debts: engineDebts.map(d => ({
+      id: d.id,
+      name: d.name,
+      debtType: d.debt_type,
+      tranches: engineTranches
+        .filter(t => t.debt_id === d.id)
+        .map(t => ({
+          label: t.label,
+          balance: t.balance,
+          apr: t.apr,
+          promoEndDate: t.promo_end_date,
+          postPromoApr: t.post_promo_apr,
+        })),
+    })),
+    monthlyIncomePence:   totalIncomePence,
+    monthlyExpensesPence: totalExpensesPence,
+    strategy: (planResult.recommendation?.strategy ?? planResult.recommended) as 'avalanche' | 'snowball',
+    debtFreeDateEstimate: (planResult.comparison?.avalanche ?? planResult.avalanche)?.debtFreeDate ?? '',
+    totalInterestPence:   Math.round(((planResult.comparison?.avalanche ?? planResult.avalanche)?.totalInterest ?? 0) * 100),
+    windfalls: [],
+  };
+
+  // The user message for the AI is a mode-aware summary request.
+  const userMessage = mode === 'C'
+    ? 'Please analyse my financial position and provide a payoff plan explanation with specific budget recommendations.'
+    : 'Please analyse my financial position and provide a payoff plan explanation.';
+
+  // Open SSE stream.
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  try {
+    for await (const token of provider.streamAnalysis(context, userMessage, [])) {
+      res.write(`data: ${JSON.stringify({ token })}\n\n`);
+    }
+    res.write('data: [DONE]\n\n');
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // SSE headers already sent — send an error event instead of HTTP 5xx.
+    res.write(`data: ${JSON.stringify({ error: 'AI provider error: ' + msg })}\n\n`);
+  } finally {
+    res.end();
+  }
 });
 
 export default router;
